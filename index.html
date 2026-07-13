@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Kayel Project Vault</title>
+<title>Project Vault</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -123,6 +123,73 @@
   .icon-btn:hover { background: var(--paper); color: var(--ink); }
   .icon-btn.danger:hover { color: var(--danger); }
 
+  .view-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+  .view-menu-wrap { position: relative; }
+  .view-btn {
+    display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--paper-line);
+    border-radius: 6px; padding: 7px 12px; font-size: 12px; color: var(--slate); cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  .view-btn:hover { border-color: var(--brass); }
+  .view-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid var(--paper-line);
+    border-radius: 8px; box-shadow: 0 10px 30px rgba(20,23,28,0.14); padding: 6px; z-index: 10; min-width: 170px;
+  }
+  .view-menu-item {
+    width: 100%; display: flex; align-items: center; gap: 9px; background: transparent; border: none;
+    padding: 8px 10px; font-size: 12.5px; color: var(--slate); border-radius: 5px; cursor: pointer; text-align: left;
+  }
+  .view-menu-item:hover { background: var(--paper); }
+  .view-menu-item.active { color: var(--brass); font-weight: 500; }
+
+  /* Grid views */
+  .grid { display: grid; gap: 18px; margin-bottom: 8px; }
+  .grid-large { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .grid-small { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .grid-tiles { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .grid-item { position: relative; border-radius: 8px; transition: background 0.12s ease; }
+  .grid-item:hover { background: #fff; }
+  .grid-main {
+    display: flex; flex-direction: column; align-items: center; text-align: center; text-decoration: none;
+    color: var(--ink); padding: 12px 8px; gap: 6px;
+  }
+  .grid-small .grid-main { flex-direction: row; text-align: left; padding: 8px 10px; gap: 8px; }
+  .grid-tiles .grid-main { flex-direction: row; text-align: left; align-items: flex-start; padding: 12px; gap: 10px; }
+  .grid-icon { font-size: 28px; line-height: 1; }
+  .grid-small .grid-icon { font-size: 15px; }
+  .grid-tiles .grid-icon { font-size: 20px; }
+  .grid-name {
+    font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .grid-small .grid-name { -webkit-line-clamp: 1; white-space: nowrap; }
+  .grid-tiles .grid-name { -webkit-line-clamp: 2; font-size: 13px; font-weight: 500; }
+  .grid-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--slate-soft); margin-top: 2px; }
+  .grid-actions {
+    position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; opacity: 0;
+    transition: opacity 0.12s ease; background: #fff; border-radius: 5px; border: 1px solid var(--paper-line);
+  }
+  .grid-item:hover .grid-actions { opacity: 1; }
+
+  /* List view */
+  .file-list { border-top: 1px solid var(--paper-line); }
+  .file-list-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--paper-line); }
+  .list-icon { flex-shrink: 0; font-size: 13px; }
+  .list-name { flex: 1; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-actions { display: flex; gap: 2px; flex-shrink: 0; }
+
+  /* Details view */
+  .details { border-top: 1px solid var(--paper-line); }
+  .details-head, .details-row {
+    display: grid; grid-template-columns: 1fr 90px 130px 100px 108px; gap: 10px; align-items: center;
+  }
+  .details-head {
+    padding: 8px 4px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--slate-soft); border-bottom: 1px solid var(--paper-line);
+  }
+  .details-row { padding: 10px 4px; border-bottom: 1px solid var(--paper-line); font-size: 12.5px; color: var(--slate); }
+  .details-name { display: flex; align-items: center; gap: 8px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col-actions { display: flex; gap: 2px; justify-self: end; }
   .empty { text-align: center; padding: 50px 20px; color: var(--slate-soft); }
   .empty.compact { padding: 20px; font-size: 13px; text-align: left; }
   .empty-title { font-family: 'Source Serif 4', serif; font-size: 17px; color: var(--ink); margin-bottom: 4px; }
@@ -272,6 +339,164 @@ let projects = [];
 let activeId = null;
 let files = [];
 let contacts = [];
+let viewMode = "details";
+
+const VIEW_OPTIONS = [
+  { id: "large", label: "Large icons", icon: "▦" },
+  { id: "small", label: "Small icons", icon: "▤" },
+  { id: "list", label: "List", icon: "☰" },
+  { id: "details", label: "Details", icon: "▥" },
+  { id: "tiles", label: "Tiles", icon: "▧" },
+  { id: "content", label: "Content", icon: "▬" },
+];
+
+function renderViewButton() {
+  const btn = document.getElementById("viewBtn");
+  const menu = document.getElementById("viewMenu");
+  if (!btn || !menu) return;
+  const current = VIEW_OPTIONS.find((v) => v.id === viewMode);
+  btn.innerHTML = `${current.icon} ${current.label} ▾`;
+  btn.onclick = () => { menu.style.display = menu.style.display === "none" ? "block" : "none"; };
+
+  menu.innerHTML = "";
+  VIEW_OPTIONS.forEach(({ id, label, icon }) => {
+    const item = document.createElement("button");
+    item.className = "view-menu-item" + (viewMode === id ? " active" : "");
+    item.innerHTML = `${icon} ${label}${viewMode === id ? ' <span style="margin-left:auto;">✓</span>' : ""}`;
+    item.onclick = () => {
+      viewMode = id;
+      menu.style.display = "none";
+      renderViewButton();
+      renderFileList();
+    };
+    menu.appendChild(item);
+  });
+
+  document.addEventListener("click", function closeMenu(e) {
+    if (!toolbarContains(e.target)) { menu.style.display = "none"; }
+  }, { once: true });
+}
+
+function toolbarContains(el) {
+  const wrap = document.querySelector(".view-menu-wrap");
+  return wrap && wrap.contains(el);
+}
+
+function fileActionsHtml(f, size) {
+  const s = size || 14;
+  return `
+    <a class="icon-btn" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}" title="Download">⬇</a>
+    <a class="icon-btn" href="${outlookComposeUrl(f)}" target="_blank" title="Email via Outlook">✉</a>
+    <button class="icon-btn danger" title="Delete">🗑</button>
+  `;
+}
+
+function wireRowActions(rowEl, f) {
+  const dangerBtn = rowEl.querySelector(".icon-btn.danger");
+  if (dangerBtn) dangerBtn.onclick = () => handleDelete(f);
+}
+
+function renderFileList() {
+  const wrap = document.getElementById("fileListWrap");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+
+  if (files.length === 0) {
+    wrap.innerHTML = `<div class="empty"><div class="empty-title">No files yet</div><div>Upload the first document for this project above.</div></div>`;
+    return;
+  }
+
+  if (viewMode === "large" || viewMode === "small" || viewMode === "tiles") {
+    const grid = document.createElement("div");
+    grid.className = `grid grid-${viewMode}`;
+    files.forEach((f) => {
+      const item = document.createElement("div");
+      item.className = "grid-item";
+      item.innerHTML = `
+        <a class="grid-main" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}">
+          <div class="grid-icon">📄</div>
+          <div class="grid-name" title="${esc(f.file_name)}">${esc(f.file_name)}</div>
+          ${viewMode === "tiles" ? `<div class="grid-sub">${fmtBytes(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</div>` : ""}
+        </a>
+        <div class="grid-actions">${fileActionsHtml(f)}</div>
+      `;
+      wireRowActions(item, f);
+      grid.appendChild(item);
+    });
+    wrap.appendChild(grid);
+    return;
+  }
+
+  if (viewMode === "list") {
+    const list = document.createElement("div");
+    list.className = "file-list";
+    files.forEach((f) => {
+      const row = document.createElement("div");
+      row.className = "file-list-row";
+      row.innerHTML = `
+        <span class="list-icon">📄</span>
+        <span class="list-name">${esc(f.file_name)}</span>
+        <div class="list-actions">${fileActionsHtml(f)}</div>
+      `;
+      wireRowActions(row, f);
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+    return;
+  }
+
+  if (viewMode === "details") {
+    const table = document.createElement("div");
+    table.className = "details";
+    table.innerHTML = `
+      <div class="details-head">
+        <span class="col-name">Name</span>
+        <span class="col-size">Size</span>
+        <span class="col-date">Modified</span>
+        <span class="col-source">Source</span>
+        <span class="col-actions"></span>
+      </div>
+    `;
+    files.forEach((f) => {
+      const row = document.createElement("div");
+      row.className = "details-row";
+      row.innerHTML = `
+        <span class="col-name details-name">📄 ${esc(f.file_name)}</span>
+        <span class="col-size">${fmtBytes(f.size_bytes)}</span>
+        <span class="col-date">${fmtDate(f.uploaded_at)}</span>
+        <span class="col-source">${f.source === "outlook" ? '<span class="tag">Outlook</span>' : "—"}</span>
+        <span class="col-actions">${fileActionsHtml(f)}</span>
+      `;
+      wireRowActions(row, f);
+      table.appendChild(row);
+    });
+    wrap.appendChild(table);
+    return;
+  }
+
+  // content view (default ledger-style)
+  const ledger = document.createElement("div");
+  ledger.className = "ledger";
+  files.forEach((f) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div class="row-icon">📄</div>
+      <div class="row-info">
+        <div class="row-name">${esc(f.file_name)}</div>
+        <div class="row-sub">
+          <span>${fmtBytes(f.size_bytes)}</span>
+          <span>${fmtDate(f.uploaded_at)}</span>
+          ${f.source === "outlook" ? '<span class="tag">Outlook</span>' : ""}
+        </div>
+      </div>
+      <div class="row-actions">${fileActionsHtml(f, 15)}</div>
+    `;
+    wireRowActions(row, f);
+    ledger.appendChild(row);
+  });
+  wrap.appendChild(ledger);
+}
 
 function fmtBytes(n) {
   if (n == null) return "—";
@@ -445,38 +670,21 @@ function renderBody(project) {
   body.appendChild(dz);
   body.appendChild(input);
 
-  if (files.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty";
-    empty.innerHTML = `<div class="empty-title">No files yet</div><div>Upload the first document for this project above.</div>`;
-    body.appendChild(empty);
-  } else {
-    const ledger = document.createElement("div");
-    ledger.className = "ledger";
-    files.forEach((f) => {
-      const row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = `
-        <div class="row-icon">📄</div>
-        <div class="row-info">
-          <div class="row-name">${esc(f.file_name)}</div>
-          <div class="row-sub">
-            <span>${fmtBytes(f.size_bytes)}</span>
-            <span>${fmtDate(f.uploaded_at)}</span>
-            ${f.source === "outlook" ? '<span class="tag">Outlook</span>' : ""}
-          </div>
-        </div>
-        <div class="row-actions">
-          <a class="icon-btn" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}" title="Download">⬇</a>
-          <a class="icon-btn" href="${outlookComposeUrl(f)}" target="_blank" title="Email via Outlook">✉</a>
-          <button class="icon-btn danger" data-id="${f.id}" data-path="${f.storage_path}" title="Delete">🗑</button>
-        </div>
-      `;
-      row.querySelector(".danger").onclick = (e) => handleDelete(f);
-      ledger.appendChild(row);
-    });
-    body.appendChild(ledger);
-  }
+  const toolbar = document.createElement("div");
+  toolbar.className = "view-toolbar";
+  toolbar.innerHTML = `
+    <div class="view-menu-wrap">
+      <button class="view-btn" id="viewBtn"></button>
+      <div class="view-menu" id="viewMenu" style="display:none;"></div>
+    </div>
+  `;
+  body.appendChild(toolbar);
+  renderViewButton();
+
+  const listWrap = document.createElement("div");
+  listWrap.id = "fileListWrap";
+  body.appendChild(listWrap);
+  renderFileList();
 
   const divider = document.createElement("div");
   divider.className = "section-divider";
