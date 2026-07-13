@@ -123,6 +123,29 @@
   .icon-btn:hover { background: var(--paper); color: var(--ink); }
   .icon-btn.danger:hover { color: var(--danger); }
 
+  .breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; font-size: 13px; }
+  .crumb-sep { color: var(--slate-soft); margin: 0 2px; }
+  .crumb { color: var(--slate-soft); cursor: pointer; padding: 3px 7px; border-radius: 5px; transition: background 0.12s ease, color 0.12s ease; }
+  .crumb:hover { background: var(--paper); color: var(--ink); }
+  .crumb.current { color: var(--ink); font-weight: 500; cursor: default; }
+  .crumb.drag-target { background: rgba(184,134,59,0.18); color: var(--brass); outline: 1.5px dashed var(--brass); }
+
+  .folder-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .folder-chip {
+    display: flex; align-items: center; gap: 4px; border: 1px solid var(--paper-line);
+    background: #fff; border-radius: 7px; padding: 4px 4px 4px 10px; transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .folder-chip.drag-target { border-color: var(--brass); background: #fdf8ee; }
+  .folder-main { display: flex; align-items: center; gap: 7px; background: none; border: none; cursor: pointer; font-size: 13px; color: var(--ink); padding: 5px 2px; }
+  .folder-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.12s ease; }
+  .folder-chip:hover .folder-actions { opacity: 1; }
+  .folder-new, .folder-add-form {
+    display: flex; align-items: center; gap: 7px; background: transparent; border: 1px dashed var(--paper-line);
+    color: var(--slate-soft); padding: 8px 12px; border-radius: 7px; font-size: 12.5px; cursor: pointer;
+  }
+  .folder-new:hover { border-color: var(--brass); color: var(--brass); }
+  .folder-rename-input { border: none; outline: none; font-size: 13px; font-family: 'Inter', sans-serif; color: var(--ink); width: 120px; }
+
   .view-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
   .view-menu-wrap { position: relative; }
   .view-btn {
@@ -426,6 +449,11 @@ let activeId = null;
 let files = [];
 let contacts = [];
 let viewMode = "details";
+let currentFolderId = null;
+let folderPath = [];
+let folders = [];
+let editingFolderId = null;
+let dragOverTarget = null;
 
 const VIEW_OPTIONS = [
   { id: "large", label: "Large icons", icon: "▦" },
@@ -566,6 +594,8 @@ function renderFileList() {
     files.forEach((f) => {
       const item = document.createElement("div");
       item.className = "grid-item";
+      item.draggable = true;
+      item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
       item.innerHTML = `
         <div class="grid-main clickable-name" data-preview-id="${f.id}">
           <div class="grid-icon">📄</div>
@@ -588,6 +618,8 @@ function renderFileList() {
     files.forEach((f) => {
       const row = document.createElement("div");
       row.className = "file-list-row";
+      row.draggable = true;
+      row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
       row.innerHTML = `
         <span class="list-icon">📄</span>
         <span class="list-name clickable-name">${esc(f.file_name)}</span>
@@ -616,6 +648,8 @@ function renderFileList() {
     files.forEach((f) => {
       const row = document.createElement("div");
       row.className = "details-row";
+      row.draggable = true;
+      row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
       row.innerHTML = `
         <span class="col-name details-name clickable-name">📄 ${esc(f.file_name)}</span>
         <span class="col-size">${fmtBytes(f.size_bytes)}</span>
@@ -637,6 +671,8 @@ function renderFileList() {
   files.forEach((f) => {
     const row = document.createElement("div");
     row.className = "row";
+    row.draggable = true;
+    row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
     row.innerHTML = `
       <div class="row-icon clickable-name">📄</div>
       <div class="row-info clickable-name">
@@ -719,7 +755,13 @@ function renderProjectList() {
     const btn = document.createElement("button");
     btn.className = "project-item" + (p.id === activeId ? " active" : "");
     btn.textContent = p.name;
-    btn.onclick = () => { activeId = p.id; renderProjectList(); loadFiles(); };
+    btn.onclick = () => {
+      activeId = p.id;
+      currentFolderId = null;
+      folderPath = [];
+      renderProjectList();
+      loadFiles();
+    };
     list.appendChild(btn);
   });
 }
@@ -735,13 +777,27 @@ async function loadFiles() {
   body.innerHTML = `<div class="loading-center"><span class="spin">↻</span> Loading files…</div>`;
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_files?project_id=eq.${activeId}&select=*&order=uploaded_at.desc`, { headers: H });
+    const folderFilter = currentFolderId ? `folder_id=eq.${currentFolderId}` : "folder_id=is.null";
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_files?project_id=eq.${activeId}&${folderFilter}&select=*&order=uploaded_at.desc`, { headers: H });
     if (!res.ok) throw new Error("Could not load files");
     files = await res.json();
     document.getElementById("mainMeta").textContent = `${files.length} file${files.length === 1 ? "" : "s"} on record`;
+    await loadFolders();
     await loadContacts();
     renderBody(project);
   } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function loadFolders() {
+  try {
+    const folderFilter = currentFolderId ? `parent_folder_id=eq.${currentFolderId}` : "parent_folder_id=is.null";
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?project_id=eq.${activeId}&${folderFilter}&select=*&order=name.asc`, { headers: H });
+    if (!res.ok) throw new Error("Could not load folders");
+    folders = await res.json();
+  } catch (e) {
+    folders = [];
     showError(e.message);
   }
 }
@@ -828,6 +884,18 @@ function renderBody(project) {
   dz.ondrop = (e) => { e.preventDefault(); dz.classList.remove("drag"); handleFiles(e.dataTransfer.files); };
   body.appendChild(dz);
   body.appendChild(input);
+
+  const breadcrumbEl = document.createElement("div");
+  breadcrumbEl.className = "breadcrumb";
+  breadcrumbEl.id = "breadcrumb";
+  body.appendChild(breadcrumbEl);
+  renderBreadcrumb(project);
+
+  const folderRowEl = document.createElement("div");
+  folderRowEl.className = "folder-row";
+  folderRowEl.id = "folderRow";
+  body.appendChild(folderRowEl);
+  renderFolderRow(project);
 
   const toolbar = document.createElement("div");
   toolbar.className = "view-toolbar";
@@ -990,6 +1058,7 @@ async function uploadOne(projectId, file) {
     headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
     body: JSON.stringify({
       project_id: projectId,
+      folder_id: currentFolderId,
       file_name: file.name,
       storage_path: storagePath,
       size_bytes: file.size,
@@ -1012,6 +1081,220 @@ async function handleDelete(file) {
   } catch (e) {
     showError("Could not delete file");
   }
+}
+
+function enterFolder(folder) {
+  currentFolderId = folder.id;
+  folderPath.push({ id: folder.id, name: folder.name });
+  loadFiles();
+}
+
+function goToBreadcrumb(index) {
+  if (index === -1) {
+    currentFolderId = null;
+    folderPath = [];
+  } else {
+    folderPath = folderPath.slice(0, index + 1);
+    currentFolderId = folderPath[folderPath.length - 1].id;
+  }
+  loadFiles();
+}
+
+function renderBreadcrumb(project) {
+  const el = document.getElementById("breadcrumb");
+  if (!el) return;
+  let html = `<span class="crumb ${dragOverTarget === "root" ? "drag-target" : ""}" id="crumbRoot">${esc(project.name)}</span>`;
+  folderPath.forEach((f, i) => {
+    const isLast = i === folderPath.length - 1;
+    html += `<span class="crumb-sep">›</span><span class="crumb ${isLast ? "current" : ""} ${dragOverTarget === f.id ? "drag-target" : ""}" data-idx="${i}">${esc(f.name)}</span>`;
+  });
+  el.innerHTML = html;
+
+  const rootCrumb = document.getElementById("crumbRoot");
+  rootCrumb.onclick = () => goToBreadcrumb(-1);
+  rootCrumb.ondragover = (e) => { e.preventDefault(); dragOverTarget = "root"; renderBreadcrumb(project); };
+  rootCrumb.ondragleave = () => { dragOverTarget = null; renderBreadcrumb(project); };
+  rootCrumb.ondrop = (e) => handleFolderDrop(e, null);
+
+  el.querySelectorAll(".crumb[data-idx]").forEach((crumbEl) => {
+    const idx = parseInt(crumbEl.dataset.idx, 10);
+    const isLast = idx === folderPath.length - 1;
+    crumbEl.onclick = () => goToBreadcrumb(idx);
+    if (!isLast) {
+      crumbEl.ondragover = (e) => { e.preventDefault(); dragOverTarget = folderPath[idx].id; renderBreadcrumb(project); };
+      crumbEl.ondragleave = () => { dragOverTarget = null; renderBreadcrumb(project); };
+      crumbEl.ondrop = (e) => handleFolderDrop(e, folderPath[idx].id);
+    }
+  });
+}
+
+async function handleAddFolder(name) {
+  if (!name || !activeId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders`, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
+      body: JSON.stringify({ project_id: activeId, parent_folder_id: currentFolderId, name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Could not create folder");
+    }
+    const [created] = await res.json();
+    folders.push(created);
+    folders.sort((a, b) => a.name.localeCompare(b.name));
+    renderFolderRow(projects.find((p) => p.id === activeId));
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function handleRenameFolder(folder, newName) {
+  const name = newName.trim();
+  if (!name || name === folder.name) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?id=eq.${folder.id}`, {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error("Could not rename folder");
+    const [updated] = await res.json();
+    folders = folders.map((f) => (f.id === updated.id ? updated : f)).sort((a, b) => a.name.localeCompare(b.name));
+    folderPath = folderPath.map((f) => (f.id === updated.id ? { id: f.id, name: updated.name } : f));
+    const project = projects.find((p) => p.id === activeId);
+    renderFolderRow(project);
+    renderBreadcrumb(project);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function handleDeleteFolder(folder) {
+  if (!confirm(`Delete "${folder.name}" and everything inside it? This can't be undone.`)) return;
+  try {
+    let allIds = [folder.id];
+    let frontier = [folder.id];
+    while (frontier.length) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?parent_folder_id=in.(${frontier.join(",")})&select=id`, { headers: H });
+      const children = await res.json();
+      const childIds = children.map((c) => c.id);
+      if (childIds.length === 0) break;
+      allIds = allIds.concat(childIds);
+      frontier = childIds;
+    }
+    const filesRes = await fetch(`${SUPABASE_URL}/rest/v1/project_files?folder_id=in.(${allIds.join(",")})&select=*`, { headers: H });
+    const filesToDelete = await filesRes.json();
+    for (const f of filesToDelete) {
+      await fetch(`${SUPABASE_URL}/storage/v1/object/project-files/${f.storage_path}`, { method: "DELETE", headers: H });
+      await fetch(`${SUPABASE_URL}/rest/v1/project_files?id=eq.${f.id}`, { method: "DELETE", headers: H });
+    }
+    await fetch(`${SUPABASE_URL}/rest/v1/project_folders?id=eq.${folder.id}`, { method: "DELETE", headers: H });
+
+    if (allIds.includes(currentFolderId)) {
+      const idx = folderPath.findIndex((f) => f.id === folder.id);
+      if (idx <= 0) {
+        currentFolderId = null;
+        folderPath = [];
+      } else {
+        folderPath = folderPath.slice(0, idx);
+        currentFolderId = folderPath[folderPath.length - 1].id;
+      }
+      loadFiles();
+    } else {
+      folders = folders.filter((f) => f.id !== folder.id);
+      renderFolderRow(projects.find((p) => p.id === activeId));
+    }
+  } catch (e) {
+    showError("Could not delete folder");
+  }
+}
+
+async function moveFileToFolder(fileId, targetFolderId) {
+  if (targetFolderId === currentFolderId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_files?id=eq.${fileId}`, {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, H),
+      body: JSON.stringify({ folder_id: targetFolderId }),
+    });
+    if (!res.ok) throw new Error("Could not move file");
+    files = files.filter((f) => f.id !== fileId);
+    document.getElementById("mainMeta").textContent = `${files.length} file${files.length === 1 ? "" : "s"} on record`;
+    renderFileList();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function handleFolderDrop(e, targetFolderId) {
+  e.preventDefault();
+  dragOverTarget = null;
+  const fileId = e.dataTransfer.getData("text/plain");
+  if (fileId) moveFileToFolder(fileId, targetFolderId);
+  const project = projects.find((p) => p.id === activeId);
+  renderBreadcrumb(project);
+  renderFolderRow(project);
+}
+
+function renderFolderRow(project) {
+  const wrap = document.getElementById("folderRow");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+
+  folders.forEach((folder) => {
+    const chip = document.createElement("div");
+    chip.className = "folder-chip" + (dragOverTarget === folder.id ? " drag-target" : "");
+    chip.innerHTML = `
+      <button class="folder-main">📁 ${esc(folder.name)}</button>
+      <div class="folder-actions">
+        <button class="icon-btn folder-rename-btn" title="Rename">✎</button>
+        <button class="icon-btn danger folder-delete-btn" title="Delete">🗑</button>
+      </div>
+    `;
+    chip.querySelector(".folder-main").onclick = () => enterFolder(folder);
+    chip.querySelector(".folder-rename-btn").onclick = () => startRenameFolderChip(chip, folder);
+    chip.querySelector(".folder-delete-btn").onclick = () => handleDeleteFolder(folder);
+    chip.ondragover = (e) => { e.preventDefault(); dragOverTarget = folder.id; chip.classList.add("drag-target"); };
+    chip.ondragleave = () => { dragOverTarget = null; chip.classList.remove("drag-target"); };
+    chip.ondrop = (e) => handleFolderDrop(e, folder.id);
+    wrap.appendChild(chip);
+  });
+
+  const newBtn = document.createElement("button");
+  newBtn.className = "folder-chip folder-new";
+  newBtn.innerHTML = "📁+ New folder";
+  newBtn.onclick = () => renderNewFolderForm(wrap, newBtn);
+  wrap.appendChild(newBtn);
+}
+
+function startRenameFolderChip(chip, folder) {
+  chip.innerHTML = `<input class="folder-rename-input" value="${esc(folder.name)}" />`;
+  const input = chip.querySelector("input");
+  input.focus();
+  input.select();
+  const commit = () => handleRenameFolder(folder, input.value);
+  input.onblur = commit;
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    if (e.key === "Escape") { renderFolderRow(projects.find((p) => p.id === activeId)); }
+  };
+}
+
+function renderNewFolderForm(wrap, newBtn) {
+  newBtn.remove();
+  const form = document.createElement("form");
+  form.className = "folder-chip folder-add-form";
+  form.innerHTML = `📁+ <input class="folder-rename-input" id="newFolderInput" placeholder="Folder name" />`;
+  wrap.appendChild(form);
+  const input = document.getElementById("newFolderInput");
+  input.focus();
+  input.onkeydown = (e) => { if (e.key === "Escape") renderFolderRow(projects.find((p) => p.id === activeId)); };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (name) handleAddFolder(name);
+  };
 }
 
 async function handleAddProject(e) {
