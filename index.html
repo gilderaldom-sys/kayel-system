@@ -283,6 +283,17 @@
   }
   .preview-btn:hover { background: var(--brass); color: #fff; }
 
+  .ms-setup-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .ms-setup-row .contact-input { min-width: 200px; }
+  .ms-status { font-size: 12px; color: var(--slate-soft); margin-top: 10px; min-height: 16px; }
+  .ms-status.ok { color: var(--success); }
+  .ms-status.err { color: var(--danger); }
+
+  .send-form { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .send-body { resize: vertical; font-family: 'Inter', sans-serif; }
+  #sendSubmitBtn { border: none; cursor: pointer; }
+  #sendSubmitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
   @media (max-width: 720px) {
     #root { flex-direction: column; height: 92vh; }
     .sidebar { width: 100%; max-height: 200px; }
@@ -363,8 +374,45 @@
       Tip: to route each email to the right project automatically, use a Switch on subject/sender
       before the HTTP call, one branch per project — or hardcode a flow per project inbox rule.
     </div>
+
+    <h4 style="margin-top:26px;">Send the actual file attached (not just a link)</h4>
+    <div style="font-size:13px;line-height:1.6;">
+      This needs a one-time Azure app registration so Microsoft lets this page send mail as you.
+      It's free and takes a few minutes.
+    </div>
+    <ol>
+      <li>Go to <code>portal.azure.com</code> → Microsoft Entra ID → App registrations → New registration.</li>
+      <li>Name it anything. Under "Redirect URI" choose platform <b>Single-page application (SPA)</b> and enter this page's exact URL: <code id="redirectUriHint"></code></li>
+      <li>After creation, copy the <b>Application (client) ID</b> and <b>Directory (tenant) ID</b> into the boxes below.</li>
+      <li>In the app's "API permissions" tab, add Microsoft Graph → Delegated → <code>Mail.Send</code>, then grant/accept consent.</li>
+    </ol>
+    <div class="ms-setup-row">
+      <input class="contact-input" id="msClientIdInput" placeholder="Application (client) ID" />
+      <input class="contact-input" id="msTenantIdInput" placeholder="Tenant ID (or leave blank for 'common')" />
+      <button class="preview-btn" id="msSaveBtn">Save</button>
+    </div>
+    <div id="msStatus" class="ms-status"></div>
   </div>
 </div>
+
+<div class="modal-backdrop" id="sendModal">
+  <div class="modal" id="sendModalInner">
+    <button class="modal-close" id="closeSendBtn">✕</button>
+    <div class="modal-title">✉ Send via Outlook</div>
+    <div class="modal-sub" id="sendModalFileLabel"></div>
+    <div class="send-form">
+      <input class="contact-input" id="sendToInput" placeholder="To (email address)" />
+      <input class="contact-input" id="sendSubjectInput" placeholder="Subject" />
+      <textarea class="contact-input send-body" id="sendBodyInput" rows="4" placeholder="Message"></textarea>
+    </div>
+    <div id="sendStatus" class="ms-status"></div>
+    <div class="preview-actions">
+      <button class="preview-btn" id="sendSubmitBtn">Send with attachment</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js"></script>
 
 <script>
 const SUPABASE_URL = "https://zpnouscvyiwbhrdjbvia.supabase.co";
@@ -437,8 +485,9 @@ async function openPreview(f) {
   document.getElementById("previewMeta").textContent = `${fmtBytes(f.size_bytes)} · ${fmtDate(f.uploaded_at)}`;
   document.getElementById("previewActions").innerHTML = `
     <a class="preview-btn" href="${publicUrl(f.storage_path)}" download="${esc(f.file_name)}">⬇ Download</a>
-    <a class="preview-btn" href="${outlookComposeUrl(f)}" target="_blank">✉ Email via Outlook</a>
+    <button class="preview-btn" id="previewEmailBtn">✉ Email via Outlook</button>
   `;
+  document.getElementById("previewEmailBtn").onclick = () => handleEmailClick(f);
 
   const body = document.getElementById("previewBody");
   const kind = getFileKind(f);
@@ -481,14 +530,24 @@ function fileActionsHtml(f, size) {
   const s = size || 14;
   return `
     <a class="icon-btn" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}" title="Download">⬇</a>
-    <a class="icon-btn" href="${outlookComposeUrl(f)}" target="_blank" title="Email via Outlook">✉</a>
+    <button class="icon-btn email-btn" title="Email via Outlook">✉</button>
     <button class="icon-btn danger" title="Delete">🗑</button>
   `;
+}
+
+function handleEmailClick(f) {
+  if (MS_CLIENT_ID) {
+    openSendModal(f);
+  } else {
+    window.open(outlookComposeUrl(f), "_blank");
+  }
 }
 
 function wireRowActions(rowEl, f) {
   const dangerBtn = rowEl.querySelector(".icon-btn.danger");
   if (dangerBtn) dangerBtn.onclick = () => handleDelete(f);
+  const emailBtn = rowEl.querySelector(".icon-btn.email-btn");
+  if (emailBtn) emailBtn.onclick = () => handleEmailClick(f);
 }
 
 function renderFileList() {
@@ -1017,6 +1076,195 @@ document.getElementById("brandLogo").src = LOGO_DATA_URI;
 document.querySelectorAll(".modal code")[0].textContent =
   document.querySelectorAll(".modal code")[0].textContent.replace("SUPABASE_URL_PLACEHOLDER", SUPABASE_URL);
 
+// ---------- Microsoft Graph: real attachment sending ----------
+let MS_CLIENT_ID = null;
+let MS_TENANT_ID = "";
+let msalInstance = null;
+let currentSendFile = null;
+
+document.getElementById("redirectUriHint").textContent =
+  window.location.origin + window.location.pathname;
+
+function setMsStatus(el, text, cls) {
+  el.textContent = text;
+  el.className = "ms-status" + (cls ? " " + cls : "");
+}
+
+async function loadAppSettings() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_settings?select=*`, { headers: H });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const map = {};
+    rows.forEach((r) => { map[r.key] = r.value; });
+    if (map.ms_client_id) {
+      MS_CLIENT_ID = map.ms_client_id;
+      document.getElementById("msClientIdInput").value = map.ms_client_id;
+    }
+    if (map.ms_tenant_id) {
+      MS_TENANT_ID = map.ms_tenant_id;
+      document.getElementById("msTenantIdInput").value = map.ms_tenant_id;
+    }
+    if (MS_CLIENT_ID) await initMsal();
+  } catch (e) {
+    // silent — Outlook attachment sending is optional
+  }
+}
+
+async function initMsal() {
+  try {
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: MS_CLIENT_ID,
+        authority: `https://login.microsoftonline.com/${MS_TENANT_ID || "common"}`,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: "sessionStorage" },
+    });
+    await msalInstance.initialize();
+    const accounts = msalInstance.getAllAccounts();
+    const statusEl = document.getElementById("msStatus");
+    if (accounts.length > 0) {
+      setMsStatus(statusEl, `Ready — signed in as ${accounts[0].username}. "Email via Outlook" will now offer to attach the real file.`, "ok");
+    } else {
+      setMsStatus(statusEl, "Client ID saved. You'll be asked to sign in the first time you send a file.", "ok");
+    }
+  } catch (e) {
+    setMsStatus(document.getElementById("msStatus"), "Could not set up Microsoft sign-in: " + e.message, "err");
+    msalInstance = null;
+  }
+}
+
+document.getElementById("msSaveBtn").onclick = async () => {
+  const clientId = document.getElementById("msClientIdInput").value.trim();
+  const tenantId = document.getElementById("msTenantIdInput").value.trim();
+  const statusEl = document.getElementById("msStatus");
+  if (!clientId) { setMsStatus(statusEl, "Paste your Application (client) ID first.", "err"); return; }
+  setMsStatus(statusEl, "Saving…");
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" }, H),
+      body: JSON.stringify([
+        { key: "ms_client_id", value: clientId },
+        { key: "ms_tenant_id", value: tenantId },
+      ]),
+    });
+    MS_CLIENT_ID = clientId;
+    MS_TENANT_ID = tenantId;
+    await initMsal();
+  } catch (e) {
+    setMsStatus(statusEl, "Could not save settings.", "err");
+  }
+};
+
+async function ensureSignedIn() {
+  if (!msalInstance) throw new Error("Set up your Azure Client ID first (Connect Outlook panel).");
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    try {
+      const result = await msalInstance.acquireTokenSilent({ scopes: ["Mail.Send"], account: accounts[0] });
+      return result.accessToken;
+    } catch (e) {
+      // fall through to interactive login
+    }
+  }
+  const result = await msalInstance.loginPopup({ scopes: ["Mail.Send"] });
+  return result.accessToken;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function openSendModal(f) {
+  currentSendFile = f;
+  const project = projects.find((p) => p.id === activeId);
+  document.getElementById("sendModalFileLabel").textContent = `Attaching: ${f.file_name}`;
+  document.getElementById("sendToInput").value = "";
+  document.getElementById("sendSubjectInput").value = `${f.file_name} — ${project ? project.name : ""}`;
+  document.getElementById("sendBodyInput").value = `Sharing this file from the ${project ? project.name : ""} project.`;
+  setMsStatus(document.getElementById("sendStatus"), "", "");
+  document.getElementById("sendModal").classList.add("open");
+}
+
+document.getElementById("closeSendBtn").onclick = () => {
+  document.getElementById("sendModal").classList.remove("open");
+};
+document.getElementById("sendModal").onclick = (e) => {
+  if (e.target.id === "sendModal") e.currentTarget.classList.remove("open");
+};
+
+document.getElementById("sendSubmitBtn").onclick = async () => {
+  const to = document.getElementById("sendToInput").value.trim();
+  const subject = document.getElementById("sendSubjectInput").value.trim();
+  const bodyText = document.getElementById("sendBodyInput").value;
+  const statusEl = document.getElementById("sendStatus");
+  const btn = document.getElementById("sendSubmitBtn");
+
+  if (!to) { setMsStatus(statusEl, "Enter a recipient email address.", "err"); return; }
+  if (!currentSendFile) return;
+
+  btn.disabled = true;
+  try {
+    setMsStatus(statusEl, "Signing in to Microsoft…");
+    const token = await ensureSignedIn();
+
+    setMsStatus(statusEl, "Fetching the file…");
+    const fileRes = await fetch(publicUrl(currentSendFile.storage_path));
+    const blob = await fileRes.blob();
+
+    if (blob.size > 3 * 1024 * 1024) {
+      setMsStatus(statusEl, "This file is over 3MB — Outlook's direct-send attachment limit. Use the link-based email instead for large files.", "err");
+      btn.disabled = false;
+      return;
+    }
+
+    setMsStatus(statusEl, "Encoding attachment…");
+    const base64 = await blobToBase64(blob);
+
+    setMsStatus(statusEl, "Sending…");
+    const graphRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: "Text", content: bodyText },
+          toRecipients: [{ emailAddress: { address: to } }],
+          attachments: [
+            {
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name: currentSendFile.file_name,
+              contentType: currentSendFile.content_type || "application/octet-stream",
+              contentBytes: base64,
+            },
+          ],
+        },
+        saveToSentItems: true,
+      }),
+    });
+
+    if (!graphRes.ok) {
+      const errBody = await graphRes.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || "Microsoft Graph declined to send this message.");
+    }
+
+    setMsStatus(statusEl, "Sent, with the file attached ✓", "ok");
+    setTimeout(() => { document.getElementById("sendModal").classList.remove("open"); }, 1200);
+  } catch (e) {
+    setMsStatus(statusEl, e.message || "Could not send the email.", "err");
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+loadAppSettings();
 loadProjects();
 </script>
 </body>
