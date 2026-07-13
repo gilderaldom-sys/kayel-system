@@ -255,6 +255,34 @@
   .modal ol { padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--slate); }
   .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; cursor: pointer; color: var(--slate-soft); font-size: 18px; }
 
+  .clickable-name { cursor: pointer; }
+  .clickable-name:hover { color: var(--brass); }
+
+  .preview-modal { max-width: 720px; }
+  .preview-body {
+    margin-top: 14px; border-radius: 8px; background: var(--paper); display: flex;
+    align-items: center; justify-content: center; min-height: 160px; overflow: hidden;
+  }
+  .preview-image { max-width: 100%; max-height: 60vh; display: block; }
+  .preview-audio { width: 100%; margin: 30px 20px; }
+  .preview-video { width: 100%; max-height: 60vh; display: block; background: #000; }
+  .preview-frame { width: 100%; height: 60vh; border: none; }
+  .preview-text {
+    width: 100%; max-height: 60vh; overflow: auto; padding: 16px; margin: 0;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; white-space: pre-wrap;
+    word-break: break-word; text-align: left;
+  }
+  .preview-none {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 40px 20px; color: var(--slate-soft); font-size: 13px;
+  }
+  .preview-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .preview-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 6px;
+    background: var(--ink); color: #f4f0e6; text-decoration: none; font-size: 12.5px; cursor: pointer; border: none;
+  }
+  .preview-btn:hover { background: var(--brass); color: #fff; }
+
   @media (max-width: 720px) {
     #root { flex-direction: column; height: 92vh; }
     .sidebar { width: 100%; max-height: 200px; }
@@ -293,6 +321,16 @@
       <div class="loading-center">Select or add a project to begin</div>
     </div>
   </main>
+</div>
+
+<div class="modal-backdrop" id="previewModal">
+  <div class="modal preview-modal" id="previewModalInner">
+    <button class="modal-close" id="closePreviewBtn">✕</button>
+    <div class="modal-title" id="previewTitle"></div>
+    <div class="modal-sub" id="previewMeta"></div>
+    <div class="preview-body" id="previewBody"></div>
+    <div class="preview-actions" id="previewActions"></div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="outlookModal">
@@ -382,6 +420,63 @@ function toolbarContains(el) {
   return wrap && wrap.contains(el);
 }
 
+function getFileKind(f) {
+  const ct = (f.content_type || "").toLowerCase();
+  const name = (f.file_name || "").toLowerCase();
+  if (ct.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp)$/.test(name)) return "image";
+  if (ct.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|flac|aac)$/.test(name)) return "audio";
+  if (ct.startsWith("video/") || /\.(mp4|webm|mov|mkv)$/.test(name)) return "video";
+  if (ct === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (ct.startsWith("text/") || /\.(txt|csv|md|json|log)$/.test(name)) return "text";
+  return "other";
+}
+
+async function openPreview(f) {
+  document.getElementById("previewModal").classList.add("open");
+  document.getElementById("previewTitle").textContent = f.file_name;
+  document.getElementById("previewMeta").textContent = `${fmtBytes(f.size_bytes)} · ${fmtDate(f.uploaded_at)}`;
+  document.getElementById("previewActions").innerHTML = `
+    <a class="preview-btn" href="${publicUrl(f.storage_path)}" download="${esc(f.file_name)}">⬇ Download</a>
+    <a class="preview-btn" href="${outlookComposeUrl(f)}" target="_blank">✉ Email via Outlook</a>
+  `;
+
+  const body = document.getElementById("previewBody");
+  const kind = getFileKind(f);
+  const url = publicUrl(f.storage_path);
+
+  if (kind === "image") {
+    body.innerHTML = `<img src="${url}" alt="${esc(f.file_name)}" class="preview-image" />`;
+  } else if (kind === "audio") {
+    body.innerHTML = `<audio controls autoplay src="${url}" class="preview-audio"></audio>`;
+  } else if (kind === "video") {
+    body.innerHTML = `<video controls autoplay src="${url}" class="preview-video"></video>`;
+  } else if (kind === "pdf") {
+    body.innerHTML = `<iframe src="${url}" class="preview-frame" title="${esc(f.file_name)}"></iframe>`;
+  } else if (kind === "text") {
+    body.innerHTML = `<pre class="preview-text">Loading…</pre>`;
+    try {
+      const res = await fetch(url);
+      const text = await res.text();
+      body.innerHTML = `<pre class="preview-text">${esc(text.slice(0, 8000))}</pre>`;
+    } catch (e) {
+      body.innerHTML = `<pre class="preview-text">Could not load a preview of this file.</pre>`;
+    }
+  } else {
+    body.innerHTML = `<div class="preview-none">📄<div>No inline preview available for this file type.</div></div>`;
+  }
+}
+
+document.getElementById("closePreviewBtn").onclick = () => {
+  document.getElementById("previewModal").classList.remove("open");
+  document.getElementById("previewBody").innerHTML = "";
+};
+document.getElementById("previewModal").onclick = (e) => {
+  if (e.target.id === "previewModal") {
+    e.currentTarget.classList.remove("open");
+    document.getElementById("previewBody").innerHTML = "";
+  }
+};
+
 function fileActionsHtml(f, size) {
   const s = size || 14;
   return `
@@ -413,13 +508,14 @@ function renderFileList() {
       const item = document.createElement("div");
       item.className = "grid-item";
       item.innerHTML = `
-        <a class="grid-main" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}">
+        <div class="grid-main clickable-name" data-preview-id="${f.id}">
           <div class="grid-icon">📄</div>
           <div class="grid-name" title="${esc(f.file_name)}">${esc(f.file_name)}</div>
           ${viewMode === "tiles" ? `<div class="grid-sub">${fmtBytes(f.size_bytes)} · ${fmtDate(f.uploaded_at)}</div>` : ""}
-        </a>
+        </div>
         <div class="grid-actions">${fileActionsHtml(f)}</div>
       `;
+      item.querySelector(".grid-main").onclick = () => openPreview(f);
       wireRowActions(item, f);
       grid.appendChild(item);
     });
@@ -435,9 +531,10 @@ function renderFileList() {
       row.className = "file-list-row";
       row.innerHTML = `
         <span class="list-icon">📄</span>
-        <span class="list-name">${esc(f.file_name)}</span>
+        <span class="list-name clickable-name">${esc(f.file_name)}</span>
         <div class="list-actions">${fileActionsHtml(f)}</div>
       `;
+      row.querySelector(".list-name").onclick = () => openPreview(f);
       wireRowActions(row, f);
       list.appendChild(row);
     });
@@ -461,12 +558,13 @@ function renderFileList() {
       const row = document.createElement("div");
       row.className = "details-row";
       row.innerHTML = `
-        <span class="col-name details-name">📄 ${esc(f.file_name)}</span>
+        <span class="col-name details-name clickable-name">📄 ${esc(f.file_name)}</span>
         <span class="col-size">${fmtBytes(f.size_bytes)}</span>
         <span class="col-date">${fmtDate(f.uploaded_at)}</span>
         <span class="col-source">${f.source === "outlook" ? '<span class="tag">Outlook</span>' : "—"}</span>
         <span class="col-actions">${fileActionsHtml(f)}</span>
       `;
+      row.querySelector(".details-name").onclick = () => openPreview(f);
       wireRowActions(row, f);
       table.appendChild(row);
     });
@@ -481,8 +579,8 @@ function renderFileList() {
     const row = document.createElement("div");
     row.className = "row";
     row.innerHTML = `
-      <div class="row-icon">📄</div>
-      <div class="row-info">
+      <div class="row-icon clickable-name">📄</div>
+      <div class="row-info clickable-name">
         <div class="row-name">${esc(f.file_name)}</div>
         <div class="row-sub">
           <span>${fmtBytes(f.size_bytes)}</span>
@@ -492,6 +590,8 @@ function renderFileList() {
       </div>
       <div class="row-actions">${fileActionsHtml(f, 15)}</div>
     `;
+    row.querySelector(".row-icon").onclick = () => openPreview(f);
+    row.querySelector(".row-info").onclick = () => openPreview(f);
     wireRowActions(row, f);
     ledger.appendChild(row);
   });
