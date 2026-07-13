@@ -283,6 +283,18 @@ function fmtDate(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
+function publicUrl(path) {
+  return `${SUPABASE_URL}/storage/v1/object/public/project-files/${path}`;
+}
+
+function outlookComposeUrl(f) {
+  const project = projects.find((p) => p.id === activeId);
+  const projectName = project ? project.name : "";
+  const subject = encodeURIComponent(`${f.file_name} — ${projectName}`);
+  const body = encodeURIComponent(`Sharing this file from the ${projectName} project:\n\n${f.file_name}\n${publicUrl(f.storage_path)}`);
+  return `https://outlook.office.com/mail/deeplink/compose?subject=${subject}&body=${body}`;
+}
+
 function esc(s) {
   const div = document.createElement("div");
   div.textContent = s;
@@ -455,8 +467,9 @@ function renderBody(project) {
           </div>
         </div>
         <div class="row-actions">
-          <a class="icon-btn" href="${SUPABASE_URL}/storage/v1/object/public/project-files/${f.storage_path}" target="_blank" download="${esc(f.file_name)}">⬇</a>
-          <button class="icon-btn danger" data-id="${f.id}" data-path="${f.storage_path}">🗑</button>
+          <a class="icon-btn" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}" title="Download">⬇</a>
+          <a class="icon-btn" href="${outlookComposeUrl(f)}" target="_blank" title="Email via Outlook">✉</a>
+          <button class="icon-btn danger" data-id="${f.id}" data-path="${f.storage_path}" title="Delete">🗑</button>
         </div>
       `;
       row.querySelector(".danger").onclick = (e) => handleDelete(f);
