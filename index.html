@@ -329,8 +329,8 @@
   #sendSubmitBtn { border: none; cursor: pointer; }
   #sendSubmitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  .mobile-toggle { display: none; }
   .mobile-close { display: none; }
+  .sidebar-handle { display: none; }
 
   @media (max-width: 760px) {
     #root {
@@ -340,24 +340,6 @@
       border: none;
       position: relative;
       overflow: hidden;
-    }
-
-    .mobile-toggle {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: fixed;
-      top: 14px;
-      left: 14px;
-      width: 38px;
-      height: 38px;
-      border-radius: 8px;
-      background: var(--ink);
-      color: #f4f0e6;
-      border: none;
-      z-index: 60;
-      box-shadow: 0 4px 14px rgba(20,23,28,0.25);
-      font-size: 16px;
     }
 
     .mobile-backdrop {
@@ -383,23 +365,26 @@
 
     .sidebar.mobile-open { transform: translateX(0); }
 
-    .mobile-close {
+    .sidebar-handle {
       display: flex;
       align-items: center;
       justify-content: center;
       position: absolute;
-      top: 20px;
-      right: 16px;
-      background: rgba(255,255,255,0.08);
+      top: 50%;
+      right: -26px;
+      transform: translateY(-50%);
+      width: 26px;
+      height: 56px;
+      background: var(--ink);
+      color: #f4f0e6;
       border: none;
-      color: #cfc9b8;
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      font-size: 13px;
+      border-radius: 0 10px 10px 0;
+      box-shadow: 3px 0 12px rgba(0,0,0,0.22);
+      z-index: 55;
+      font-size: 15px;
     }
 
-    .main { width: 100%; padding-top: 54px; }
+    .main { width: 100%; }
     .main-head { padding: 18px 16px 14px; }
     .body { padding: 16px; }
     .main-title, .title-input { font-size: 20px; }
@@ -435,13 +420,12 @@
 <body>
 
 <div id="root">
-  <button class="mobile-toggle" id="mobileToggleBtn">☰</button>
   <div class="mobile-backdrop" id="mobileBackdrop" style="display:none;"></div>
   <aside class="sidebar" id="sidebar">
+    <button class="sidebar-handle" id="sidebarHandleBtn">›</button>
     <div class="sidebar-head">
       <img src="" alt="Kayel" class="brand-logo" id="brandLogo" />
       <div class="brand-sub">Document register</div>
-      <button class="mobile-close" id="mobileCloseBtn">✕</button>
     </div>
     <div class="search-wrap">
       <span class="search-icon">🔍</span>
@@ -1548,13 +1532,17 @@ wireAddButton();
 function openMobileSidebar() {
   document.getElementById("sidebar").classList.add("mobile-open");
   document.getElementById("mobileBackdrop").style.display = "block";
+  document.getElementById("sidebarHandleBtn").textContent = "‹";
 }
 function closeMobileSidebar() {
   document.getElementById("sidebar").classList.remove("mobile-open");
   document.getElementById("mobileBackdrop").style.display = "none";
+  document.getElementById("sidebarHandleBtn").textContent = "›";
 }
-document.getElementById("mobileToggleBtn").onclick = openMobileSidebar;
-document.getElementById("mobileCloseBtn").onclick = closeMobileSidebar;
+document.getElementById("sidebarHandleBtn").onclick = () => {
+  const isOpen = document.getElementById("sidebar").classList.contains("mobile-open");
+  if (isOpen) closeMobileSidebar(); else openMobileSidebar();
+};
 document.getElementById("mobileBackdrop").onclick = closeMobileSidebar;
 
 document.getElementById("outlookBtn").onclick = () => {
