@@ -229,6 +229,7 @@
   .empty.compact { padding: 20px; font-size: 13px; text-align: left; }
   .empty-title { font-family: 'Source Serif 4', serif; font-size: 17px; color: var(--ink); margin-bottom: 4px; }
 
+  .section-divider.section-divider-top { margin-top: 0; }
   .section-divider {
     display: flex; align-items: center; gap: 10px; margin: 30px 0 16px;
     font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 1px;
@@ -988,6 +989,21 @@ function renderBody(project) {
   const body = document.getElementById("body");
   body.innerHTML = "";
 
+  const peopleDivider = document.createElement("div");
+  peopleDivider.className = "section-divider section-divider-top";
+  peopleDivider.innerHTML = "<span>People &amp; suppliers</span>";
+  body.appendChild(peopleDivider);
+
+  const contactsWrap = document.createElement("div");
+  contactsWrap.id = "contactsWrap";
+  body.appendChild(contactsWrap);
+  renderContacts();
+
+  const filesDivider = document.createElement("div");
+  filesDivider.className = "section-divider";
+  filesDivider.innerHTML = "<span>Files</span>";
+  body.appendChild(filesDivider);
+
   const dz = document.createElement("div");
   dz.className = "dropzone";
   dz.id = "dropzone";
@@ -1037,16 +1053,6 @@ function renderBody(project) {
   listWrap.id = "fileListWrap";
   body.appendChild(listWrap);
   renderFileList();
-
-  const divider = document.createElement("div");
-  divider.className = "section-divider";
-  divider.innerHTML = "<span>People &amp; suppliers</span>";
-  body.appendChild(divider);
-
-  const contactsWrap = document.createElement("div");
-  contactsWrap.id = "contactsWrap";
-  body.appendChild(contactsWrap);
-  renderContacts();
 }
 
 const CONTACT_TYPE_LABEL = { stakeholder: "Stakeholder", assignee: "Assignee", supplier: "Supplier" };
