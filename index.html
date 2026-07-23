@@ -53,6 +53,22 @@
   .sidebar-head { padding: 24px 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
   .brand-logo { height: 30px; width: auto; display: block; margin-bottom: 14px; }
   .brand-sub { font-size: 11.5px; color: #8b8f7f; margin-top: 3px; letter-spacing: 0.4px; text-transform: uppercase; }
+  .search-wrap { position: relative; margin: 12px 12px 4px; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; pointer-events: none; }
+  .search-input {
+    width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 6px; padding: 8px 30px; color: #f4f0e6; font-size: 12.5px; font-family: 'Inter', sans-serif;
+    outline: none; box-sizing: border-box;
+  }
+  .search-input:focus { border-color: var(--brass-soft); }
+  .search-input::placeholder { color: #8b8f7f; }
+  .search-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none;
+    border: none; color: #8b8f7f; cursor: pointer; font-size: 12px;
+  }
+  .search-clear:hover { color: #f4f0e6; }
+  .search-empty { padding: 14px 12px; color: #8b8f7f; font-size: 12px; line-height: 1.5; }
+
   .project-list { flex: 1; overflow-y: auto; padding: 10px; }
   .project-item {
     width: 100%; text-align: left; background: transparent; border: none; color: #cfc9b8;
@@ -79,7 +95,7 @@
   .add-input::placeholder { color: #8b8f7f; }
 
   /* Main */
-  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .main-head { padding: 26px 32px 18px; border-bottom: 1px solid var(--paper-line); }
   .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--brass); margin-bottom: 6px; }
   .main-title { font-family: 'Source Serif 4', serif; font-size: 26px; font-weight: 600; color: var(--ink); }
@@ -108,10 +124,10 @@
   .dropzone-text-sub { font-size: 12.5px; color: var(--slate-soft); margin-top: 2px; }
 
   .ledger { border-top: 1px solid var(--paper-line); }
-  .row { display: flex; align-items: center; gap: 14px; padding: 13px 4px; border-bottom: 1px solid var(--paper-line); }
+  .row { display: flex; align-items: flex-start; gap: 14px; padding: 13px 4px; border-bottom: 1px solid var(--paper-line); }
   .row-icon { width: 30px; height: 30px; border-radius: 5px; background: var(--paper); display: flex; align-items: center; justify-content: center; color: var(--slate-soft); flex-shrink: 0; }
   .row-info { flex: 1; min-width: 0; }
-  .row-name { font-size: 13.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-name { font-size: 13.5px; color: var(--ink); overflow-wrap: break-word; word-break: break-word; }
   .row-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--slate-soft); margin-top: 2px; display: flex; gap: 10px; align-items: center; }
   .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 3px; background: rgba(79,122,93,0.12); color: var(--success); }
   .row-actions { display: flex; gap: 4px; flex-shrink: 0; }
@@ -122,6 +138,29 @@
   }
   .icon-btn:hover { background: var(--paper); color: var(--ink); }
   .icon-btn.danger:hover { color: var(--danger); }
+
+  .breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; font-size: 13px; }
+  .crumb-sep { color: var(--slate-soft); margin: 0 2px; }
+  .crumb { color: var(--slate-soft); cursor: pointer; padding: 3px 7px; border-radius: 5px; transition: background 0.12s ease, color 0.12s ease; }
+  .crumb:hover { background: var(--paper); color: var(--ink); }
+  .crumb.current { color: var(--ink); font-weight: 500; cursor: default; }
+  .crumb.drag-target { background: rgba(184,134,59,0.18); color: var(--brass); outline: 1.5px dashed var(--brass); }
+
+  .folder-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .folder-chip {
+    display: flex; align-items: center; gap: 4px; border: 1px solid var(--paper-line);
+    background: #fff; border-radius: 7px; padding: 4px 4px 4px 10px; transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .folder-chip.drag-target { border-color: var(--brass); background: #fdf8ee; }
+  .folder-main { display: flex; align-items: center; gap: 7px; background: none; border: none; cursor: pointer; font-size: 13px; color: var(--ink); padding: 5px 2px; }
+  .folder-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.12s ease; }
+  .folder-chip:hover .folder-actions { opacity: 1; }
+  .folder-new, .folder-add-form {
+    display: flex; align-items: center; gap: 7px; background: transparent; border: 1px dashed var(--paper-line);
+    color: var(--slate-soft); padding: 8px 12px; border-radius: 7px; font-size: 12.5px; cursor: pointer;
+  }
+  .folder-new:hover { border-color: var(--brass); color: var(--brass); }
+  .folder-rename-input { border: none; outline: none; font-size: 13px; font-family: 'Inter', sans-serif; color: var(--ink); width: 120px; }
 
   .view-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
   .view-menu-wrap { position: relative; }
@@ -158,12 +197,8 @@
   .grid-icon { font-size: 28px; line-height: 1; }
   .grid-small .grid-icon { font-size: 15px; }
   .grid-tiles .grid-icon { font-size: 20px; }
-  .grid-name {
-    font-size: 12px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
-    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  }
-  .grid-small .grid-name { -webkit-line-clamp: 1; white-space: nowrap; }
-  .grid-tiles .grid-name { -webkit-line-clamp: 2; font-size: 13px; font-weight: 500; }
+  .grid-name { font-size: 12px; overflow-wrap: break-word; word-break: break-word; }
+  .grid-tiles .grid-name { font-size: 13px; font-weight: 500; }
   .grid-sub { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--slate-soft); margin-top: 2px; }
   .grid-actions {
     position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; opacity: 0;
@@ -173,9 +208,9 @@
 
   /* List view */
   .file-list { border-top: 1px solid var(--paper-line); }
-  .file-list-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--paper-line); }
-  .list-icon { flex-shrink: 0; font-size: 13px; }
-  .list-name { flex: 1; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-list-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--paper-line); }
+  .list-icon { flex-shrink: 0; font-size: 13px; margin-top: 2px; }
+  .list-name { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); overflow-wrap: break-word; word-break: break-word; }
   .list-actions { display: flex; gap: 2px; flex-shrink: 0; }
 
   /* Details view */
@@ -187,13 +222,14 @@
     padding: 8px 4px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase;
     letter-spacing: 0.5px; color: var(--slate-soft); border-bottom: 1px solid var(--paper-line);
   }
-  .details-row { padding: 10px 4px; border-bottom: 1px solid var(--paper-line); font-size: 12.5px; color: var(--slate); }
-  .details-name { display: flex; align-items: center; gap: 8px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .details-row { padding: 10px 4px; border-bottom: 1px solid var(--paper-line); font-size: 12.5px; color: var(--slate); align-items: flex-start; }
+  .details-name { display: flex; align-items: flex-start; gap: 8px; min-width: 0; color: var(--ink); overflow-wrap: break-word; word-break: break-word; }
   .col-actions { display: flex; gap: 2px; justify-self: end; }
   .empty { text-align: center; padding: 50px 20px; color: var(--slate-soft); }
   .empty.compact { padding: 20px; font-size: 13px; text-align: left; }
   .empty-title { font-family: 'Source Serif 4', serif; font-size: 17px; color: var(--ink); margin-bottom: 4px; }
 
+  .section-divider.section-divider-top { margin-top: 0; }
   .section-divider {
     display: flex; align-items: center; gap: 10px; margin: 30px 0 16px;
     font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 1px;
@@ -294,20 +330,108 @@
   #sendSubmitBtn { border: none; cursor: pointer; }
   #sendSubmitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  @media (max-width: 720px) {
-    #root { flex-direction: column; height: 92vh; }
-    .sidebar { width: 100%; max-height: 200px; }
-    .main-head, .body { padding-left: 18px; padding-right: 18px; }
+  .mobile-close { display: none; }
+  .sidebar-handle { display: none; }
+
+  @media (max-width: 760px) {
+    #root {
+      flex-direction: column;
+      height: 100dvh;
+      border-radius: 0;
+      border: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mobile-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(20,23,28,0.5);
+      z-index: 45;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 82vw;
+      max-width: 320px;
+      max-height: none;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      z-index: 50;
+      box-shadow: 0 0 40px rgba(0,0,0,0.3);
+    }
+
+    .sidebar.mobile-open { transform: translateX(0); }
+
+    .sidebar-handle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: 50%;
+      right: -26px;
+      transform: translateY(-50%);
+      width: 26px;
+      height: 56px;
+      background: var(--ink);
+      color: #f4f0e6;
+      border: none;
+      border-radius: 0 10px 10px 0;
+      box-shadow: 3px 0 12px rgba(0,0,0,0.22);
+      z-index: 55;
+      font-size: 15px;
+    }
+
+    .main { width: 100%; }
+    .main-head { padding: 18px 16px 14px; }
+    .body { padding: 16px; }
+    .main-title, .title-input { font-size: 20px; }
+
+    .dropzone { padding: 16px; gap: 10px; }
+    .dropzone-text-sub { display: none; }
+
+    .folder-row, .view-toolbar { margin-bottom: 12px; }
+
+    .grid-large { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 10px; }
+    .grid-small { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .grid-tiles { grid-template-columns: 1fr; }
+
+    .details-head, .details-row { grid-template-columns: 1fr 70px 88px; }
+    .col-date, .col-source { display: none; }
+
+    .modal { max-width: 92vw; padding: 20px 18px; }
+    .preview-frame, .preview-video { height: 40vh; }
+    .preview-actions { flex-wrap: wrap; }
+
+    .icon-btn { width: 34px; height: 34px; }
+
+    .grid-actions { opacity: 1; position: static; border: none; margin-top: 6px; justify-content: center; }
+    .grid-main { padding: 10px 4px; }
+  }
+
+  @media (max-width: 420px) {
+    .details-head, .details-row { grid-template-columns: 1fr 92px; }
+    .col-size { display: none; }
   }
 </style>
 </head>
 <body>
 
 <div id="root">
-  <aside class="sidebar">
+  <div class="mobile-backdrop" id="mobileBackdrop" style="display:none;"></div>
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-handle" id="sidebarHandleBtn">›</button>
     <div class="sidebar-head">
       <img src="" alt="Kayel" class="brand-logo" id="brandLogo" />
       <div class="brand-sub">Document register</div>
+    </div>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="projectSearchInput" placeholder="Search projects…" />
+      <button class="search-clear" id="projectSearchClear" style="display:none;">✕</button>
     </div>
     <nav class="project-list" id="projectList">
       <div style="padding:14px;color:#8b8f7f;font-size:12.5px;">Loading projects…</div>
@@ -412,6 +536,17 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="moveModal">
+  <div class="modal">
+    <button class="modal-close" id="closeMoveBtn">✕</button>
+    <div class="modal-title">Move to folder</div>
+    <div class="modal-sub" id="moveModalFileLabel"></div>
+    <div id="moveModalBody">
+      <div class="loading-center"><span class="spin">↻</span> Loading folders…</div>
+    </div>
+  </div>
+</div>
+
 <script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js"></script>
 
 <script>
@@ -426,6 +561,11 @@ let activeId = null;
 let files = [];
 let contacts = [];
 let viewMode = "details";
+let currentFolderId = null;
+let folderPath = [];
+let folders = [];
+let editingFolderId = null;
+let dragOverTarget = null;
 
 const VIEW_OPTIONS = [
   { id: "large", label: "Large icons", icon: "▦" },
@@ -531,6 +671,7 @@ function fileActionsHtml(f, size) {
   return `
     <a class="icon-btn" href="${publicUrl(f.storage_path)}" target="_blank" download="${esc(f.file_name)}" title="Download">⬇</a>
     <button class="icon-btn email-btn" title="Email via Outlook">✉</button>
+    <button class="icon-btn move-btn" title="Move to folder">📁</button>
     <button class="icon-btn danger" title="Delete">🗑</button>
   `;
 }
@@ -548,6 +689,8 @@ function wireRowActions(rowEl, f) {
   if (dangerBtn) dangerBtn.onclick = () => handleDelete(f);
   const emailBtn = rowEl.querySelector(".icon-btn.email-btn");
   if (emailBtn) emailBtn.onclick = () => handleEmailClick(f);
+  const moveBtn = rowEl.querySelector(".icon-btn.move-btn");
+  if (moveBtn) moveBtn.onclick = () => openMoveModal(f);
 }
 
 function renderFileList() {
@@ -566,6 +709,8 @@ function renderFileList() {
     files.forEach((f) => {
       const item = document.createElement("div");
       item.className = "grid-item";
+      item.draggable = true;
+      item.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
       item.innerHTML = `
         <div class="grid-main clickable-name" data-preview-id="${f.id}">
           <div class="grid-icon">📄</div>
@@ -588,6 +733,8 @@ function renderFileList() {
     files.forEach((f) => {
       const row = document.createElement("div");
       row.className = "file-list-row";
+      row.draggable = true;
+      row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
       row.innerHTML = `
         <span class="list-icon">📄</span>
         <span class="list-name clickable-name">${esc(f.file_name)}</span>
@@ -616,6 +763,8 @@ function renderFileList() {
     files.forEach((f) => {
       const row = document.createElement("div");
       row.className = "details-row";
+      row.draggable = true;
+      row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
       row.innerHTML = `
         <span class="col-name details-name clickable-name">📄 ${esc(f.file_name)}</span>
         <span class="col-size">${fmtBytes(f.size_bytes)}</span>
@@ -637,6 +786,8 @@ function renderFileList() {
   files.forEach((f) => {
     const row = document.createElement("div");
     row.className = "row";
+    row.draggable = true;
+    row.ondragstart = (e) => { e.dataTransfer.setData("text/plain", f.id); e.dataTransfer.effectAllowed = "move"; };
     row.innerHTML = `
       <div class="row-icon clickable-name">📄</div>
       <div class="row-info clickable-name">
@@ -712,14 +863,31 @@ async function loadProjects() {
   }
 }
 
+let projectSearch = "";
+
 function renderProjectList() {
   const list = document.getElementById("projectList");
   list.innerHTML = "";
-  projects.forEach((p) => {
+  const term = projectSearch.trim().toLowerCase();
+  const filtered = term ? projects.filter((p) => p.name.toLowerCase().includes(term)) : projects;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="search-empty">No projects match "${esc(projectSearch)}"</div>`;
+    return;
+  }
+
+  filtered.forEach((p) => {
     const btn = document.createElement("button");
     btn.className = "project-item" + (p.id === activeId ? " active" : "");
     btn.textContent = p.name;
-    btn.onclick = () => { activeId = p.id; renderProjectList(); loadFiles(); };
+    btn.onclick = () => {
+      activeId = p.id;
+      currentFolderId = null;
+      folderPath = [];
+      renderProjectList();
+      loadFiles();
+      closeMobileSidebar();
+    };
     list.appendChild(btn);
   });
 }
@@ -735,13 +903,27 @@ async function loadFiles() {
   body.innerHTML = `<div class="loading-center"><span class="spin">↻</span> Loading files…</div>`;
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_files?project_id=eq.${activeId}&select=*&order=uploaded_at.desc`, { headers: H });
+    const folderFilter = currentFolderId ? `folder_id=eq.${currentFolderId}` : "folder_id=is.null";
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_files?project_id=eq.${activeId}&${folderFilter}&select=*&order=uploaded_at.desc`, { headers: H });
     if (!res.ok) throw new Error("Could not load files");
     files = await res.json();
     document.getElementById("mainMeta").textContent = `${files.length} file${files.length === 1 ? "" : "s"} on record`;
+    await loadFolders();
     await loadContacts();
     renderBody(project);
   } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function loadFolders() {
+  try {
+    const folderFilter = currentFolderId ? `parent_folder_id=eq.${currentFolderId}` : "parent_folder_id=is.null";
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?project_id=eq.${activeId}&${folderFilter}&select=*&order=name.asc`, { headers: H });
+    if (!res.ok) throw new Error("Could not load folders");
+    folders = await res.json();
+  } catch (e) {
+    folders = [];
     showError(e.message);
   }
 }
@@ -807,6 +989,21 @@ function renderBody(project) {
   const body = document.getElementById("body");
   body.innerHTML = "";
 
+  const peopleDivider = document.createElement("div");
+  peopleDivider.className = "section-divider section-divider-top";
+  peopleDivider.innerHTML = "<span>People &amp; suppliers</span>";
+  body.appendChild(peopleDivider);
+
+  const contactsWrap = document.createElement("div");
+  contactsWrap.id = "contactsWrap";
+  body.appendChild(contactsWrap);
+  renderContacts();
+
+  const filesDivider = document.createElement("div");
+  filesDivider.className = "section-divider";
+  filesDivider.innerHTML = "<span>Files</span>";
+  body.appendChild(filesDivider);
+
   const dz = document.createElement("div");
   dz.className = "dropzone";
   dz.id = "dropzone";
@@ -829,6 +1026,18 @@ function renderBody(project) {
   body.appendChild(dz);
   body.appendChild(input);
 
+  const breadcrumbEl = document.createElement("div");
+  breadcrumbEl.className = "breadcrumb";
+  breadcrumbEl.id = "breadcrumb";
+  body.appendChild(breadcrumbEl);
+  renderBreadcrumb(project);
+
+  const folderRowEl = document.createElement("div");
+  folderRowEl.className = "folder-row";
+  folderRowEl.id = "folderRow";
+  body.appendChild(folderRowEl);
+  renderFolderRow(project);
+
   const toolbar = document.createElement("div");
   toolbar.className = "view-toolbar";
   toolbar.innerHTML = `
@@ -844,16 +1053,6 @@ function renderBody(project) {
   listWrap.id = "fileListWrap";
   body.appendChild(listWrap);
   renderFileList();
-
-  const divider = document.createElement("div");
-  divider.className = "section-divider";
-  divider.innerHTML = "<span>People &amp; suppliers</span>";
-  body.appendChild(divider);
-
-  const contactsWrap = document.createElement("div");
-  contactsWrap.id = "contactsWrap";
-  body.appendChild(contactsWrap);
-  renderContacts();
 }
 
 const CONTACT_TYPE_LABEL = { stakeholder: "Stakeholder", assignee: "Assignee", supplier: "Supplier" };
@@ -990,6 +1189,7 @@ async function uploadOne(projectId, file) {
     headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
     body: JSON.stringify({
       project_id: projectId,
+      folder_id: currentFolderId,
       file_name: file.name,
       storage_path: storagePath,
       size_bytes: file.size,
@@ -1012,6 +1212,281 @@ async function handleDelete(file) {
   } catch (e) {
     showError("Could not delete file");
   }
+}
+
+function enterFolder(folder) {
+  currentFolderId = folder.id;
+  folderPath.push({ id: folder.id, name: folder.name });
+  loadFiles();
+}
+
+function goToBreadcrumb(index) {
+  if (index === -1) {
+    currentFolderId = null;
+    folderPath = [];
+  } else {
+    folderPath = folderPath.slice(0, index + 1);
+    currentFolderId = folderPath[folderPath.length - 1].id;
+  }
+  loadFiles();
+}
+
+function renderBreadcrumb(project) {
+  const el = document.getElementById("breadcrumb");
+  if (!el) return;
+  let html = `<span class="crumb ${dragOverTarget === "root" ? "drag-target" : ""}" id="crumbRoot">${esc(project.name)}</span>`;
+  folderPath.forEach((f, i) => {
+    const isLast = i === folderPath.length - 1;
+    html += `<span class="crumb-sep">›</span><span class="crumb ${isLast ? "current" : ""} ${dragOverTarget === f.id ? "drag-target" : ""}" data-idx="${i}">${esc(f.name)}</span>`;
+  });
+  el.innerHTML = html;
+
+  const rootCrumb = document.getElementById("crumbRoot");
+  rootCrumb.onclick = () => goToBreadcrumb(-1);
+  rootCrumb.ondragover = (e) => { e.preventDefault(); dragOverTarget = "root"; renderBreadcrumb(project); };
+  rootCrumb.ondragleave = () => { dragOverTarget = null; renderBreadcrumb(project); };
+  rootCrumb.ondrop = (e) => handleFolderDrop(e, null);
+
+  el.querySelectorAll(".crumb[data-idx]").forEach((crumbEl) => {
+    const idx = parseInt(crumbEl.dataset.idx, 10);
+    const isLast = idx === folderPath.length - 1;
+    crumbEl.onclick = () => goToBreadcrumb(idx);
+    if (!isLast) {
+      crumbEl.ondragover = (e) => { e.preventDefault(); dragOverTarget = folderPath[idx].id; renderBreadcrumb(project); };
+      crumbEl.ondragleave = () => { dragOverTarget = null; renderBreadcrumb(project); };
+      crumbEl.ondrop = (e) => handleFolderDrop(e, folderPath[idx].id);
+    }
+  });
+}
+
+async function handleAddFolder(name) {
+  if (!name || !activeId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders`, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
+      body: JSON.stringify({ project_id: activeId, parent_folder_id: currentFolderId, name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Could not create folder");
+    }
+    const [created] = await res.json();
+    folders.push(created);
+    folders.sort((a, b) => a.name.localeCompare(b.name));
+    renderFolderRow(projects.find((p) => p.id === activeId));
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function handleRenameFolder(folder, newName) {
+  const name = newName.trim();
+  if (!name || name === folder.name) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?id=eq.${folder.id}`, {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error("Could not rename folder");
+    const [updated] = await res.json();
+    folders = folders.map((f) => (f.id === updated.id ? updated : f)).sort((a, b) => a.name.localeCompare(b.name));
+    folderPath = folderPath.map((f) => (f.id === updated.id ? { id: f.id, name: updated.name } : f));
+    const project = projects.find((p) => p.id === activeId);
+    renderFolderRow(project);
+    renderBreadcrumb(project);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function handleDeleteFolder(folder) {
+  if (!confirm(`Delete "${folder.name}" and everything inside it? This can't be undone.`)) return;
+  try {
+    let allIds = [folder.id];
+    let frontier = [folder.id];
+    while (frontier.length) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?parent_folder_id=in.(${frontier.join(",")})&select=id`, { headers: H });
+      const children = await res.json();
+      const childIds = children.map((c) => c.id);
+      if (childIds.length === 0) break;
+      allIds = allIds.concat(childIds);
+      frontier = childIds;
+    }
+    const filesRes = await fetch(`${SUPABASE_URL}/rest/v1/project_files?folder_id=in.(${allIds.join(",")})&select=*`, { headers: H });
+    const filesToDelete = await filesRes.json();
+    for (const f of filesToDelete) {
+      await fetch(`${SUPABASE_URL}/storage/v1/object/project-files/${f.storage_path}`, { method: "DELETE", headers: H });
+      await fetch(`${SUPABASE_URL}/rest/v1/project_files?id=eq.${f.id}`, { method: "DELETE", headers: H });
+    }
+    await fetch(`${SUPABASE_URL}/rest/v1/project_folders?id=eq.${folder.id}`, { method: "DELETE", headers: H });
+
+    if (allIds.includes(currentFolderId)) {
+      const idx = folderPath.findIndex((f) => f.id === folder.id);
+      if (idx <= 0) {
+        currentFolderId = null;
+        folderPath = [];
+      } else {
+        folderPath = folderPath.slice(0, idx);
+        currentFolderId = folderPath[folderPath.length - 1].id;
+      }
+      loadFiles();
+    } else {
+      folders = folders.filter((f) => f.id !== folder.id);
+      renderFolderRow(projects.find((p) => p.id === activeId));
+    }
+  } catch (e) {
+    showError("Could not delete folder");
+  }
+}
+
+async function moveFileToFolder(fileId, targetFolderId) {
+  if (targetFolderId === currentFolderId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_files?id=eq.${fileId}`, {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, H),
+      body: JSON.stringify({ folder_id: targetFolderId }),
+    });
+    if (!res.ok) throw new Error("Could not move file");
+    files = files.filter((f) => f.id !== fileId);
+    document.getElementById("mainMeta").textContent = `${files.length} file${files.length === 1 ? "" : "s"} on record`;
+    renderFileList();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function handleFolderDrop(e, targetFolderId) {
+  e.preventDefault();
+  dragOverTarget = null;
+  const fileId = e.dataTransfer.getData("text/plain");
+  if (fileId) moveFileToFolder(fileId, targetFolderId);
+  const project = projects.find((p) => p.id === activeId);
+  renderBreadcrumb(project);
+  renderFolderRow(project);
+}
+
+let moveModalFileId = null;
+
+async function openMoveModal(f) {
+  moveModalFileId = f.id;
+  const project = projects.find((p) => p.id === activeId);
+  document.getElementById("moveModalFileLabel").textContent = f.file_name;
+  document.getElementById("moveModalBody").innerHTML = `<div class="loading-center"><span class="spin">↻</span> Loading folders…</div>`;
+  document.getElementById("moveModal").classList.add("open");
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_folders?project_id=eq.${activeId}&select=id,name,parent_folder_id`, { headers: H });
+    const all = await res.json();
+    const byParent = {};
+    all.forEach((folder) => {
+      const key = folder.parent_folder_id || "root";
+      if (!byParent[key]) byParent[key] = [];
+      byParent[key].push(folder);
+    });
+    const flat = [];
+    function walk(parentKey, depth) {
+      (byParent[parentKey] || [])
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((folder) => {
+          flat.push({ id: folder.id, label: "—".repeat(depth) + " " + folder.name });
+          walk(folder.id, depth + 1);
+        });
+    }
+    walk("root", 0);
+
+    const options = [`<option value="">${esc(project ? project.name : "")} (root)</option>`]
+      .concat(flat.map((opt) => `<option value="${opt.id}">${esc(opt.label)}</option>`))
+      .join("");
+
+    document.getElementById("moveModalBody").innerHTML = `
+      <select class="contact-select" id="moveTargetSelect" style="width:100%;margin-top:14px;">${options}</select>
+      <div class="preview-actions">
+        <button class="preview-btn" id="confirmMoveBtn">Move here</button>
+      </div>
+    `;
+    document.getElementById("confirmMoveBtn").onclick = confirmMove;
+  } catch (e) {
+    document.getElementById("moveModalBody").innerHTML = `<div class="empty">Could not load folders.</div>`;
+  }
+}
+
+async function confirmMove() {
+  if (!moveModalFileId) return;
+  const select = document.getElementById("moveTargetSelect");
+  const targetId = select && select.value ? select.value : null;
+  await moveFileToFolder(moveModalFileId, targetId);
+  document.getElementById("moveModal").classList.remove("open");
+  moveModalFileId = null;
+}
+
+document.getElementById("closeMoveBtn").onclick = () => {
+  document.getElementById("moveModal").classList.remove("open");
+};
+document.getElementById("moveModal").onclick = (e) => {
+  if (e.target.id === "moveModal") e.currentTarget.classList.remove("open");
+};
+
+function renderFolderRow(project) {
+  const wrap = document.getElementById("folderRow");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+
+  folders.forEach((folder) => {
+    const chip = document.createElement("div");
+    chip.className = "folder-chip" + (dragOverTarget === folder.id ? " drag-target" : "");
+    chip.innerHTML = `
+      <button class="folder-main">📁 ${esc(folder.name)}</button>
+      <div class="folder-actions">
+        <button class="icon-btn folder-rename-btn" title="Rename">✎</button>
+        <button class="icon-btn danger folder-delete-btn" title="Delete">🗑</button>
+      </div>
+    `;
+    chip.querySelector(".folder-main").onclick = () => enterFolder(folder);
+    chip.querySelector(".folder-rename-btn").onclick = () => startRenameFolderChip(chip, folder);
+    chip.querySelector(".folder-delete-btn").onclick = () => handleDeleteFolder(folder);
+    chip.ondragover = (e) => { e.preventDefault(); dragOverTarget = folder.id; chip.classList.add("drag-target"); };
+    chip.ondragleave = () => { dragOverTarget = null; chip.classList.remove("drag-target"); };
+    chip.ondrop = (e) => handleFolderDrop(e, folder.id);
+    wrap.appendChild(chip);
+  });
+
+  const newBtn = document.createElement("button");
+  newBtn.className = "folder-chip folder-new";
+  newBtn.innerHTML = "📁+ New folder";
+  newBtn.onclick = () => renderNewFolderForm(wrap, newBtn);
+  wrap.appendChild(newBtn);
+}
+
+function startRenameFolderChip(chip, folder) {
+  chip.innerHTML = `<input class="folder-rename-input" value="${esc(folder.name)}" />`;
+  const input = chip.querySelector("input");
+  input.focus();
+  input.select();
+  const commit = () => handleRenameFolder(folder, input.value);
+  input.onblur = commit;
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    if (e.key === "Escape") { renderFolderRow(projects.find((p) => p.id === activeId)); }
+  };
+}
+
+function renderNewFolderForm(wrap, newBtn) {
+  newBtn.remove();
+  const form = document.createElement("form");
+  form.className = "folder-chip folder-add-form";
+  form.innerHTML = `📁+ <input class="folder-rename-input" id="newFolderInput" placeholder="Folder name" />`;
+  wrap.appendChild(form);
+  const input = document.getElementById("newFolderInput");
+  input.focus();
+  input.onkeydown = (e) => { if (e.key === "Escape") renderFolderRow(projects.find((p) => p.id === activeId)); };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (name) handleAddFolder(name);
+  };
 }
 
 async function handleAddProject(e) {
@@ -1059,6 +1534,22 @@ function openAddForm() {
   document.getElementById("newProjectInput").onkeydown = (e) => { if (e.key === "Escape") { wrap.innerHTML = `<button class="btn-ghost" id="showAddBtn">+ Add project</button>`; wireAddButton(); } };
 }
 wireAddButton();
+
+function openMobileSidebar() {
+  document.getElementById("sidebar").classList.add("mobile-open");
+  document.getElementById("mobileBackdrop").style.display = "block";
+  document.getElementById("sidebarHandleBtn").textContent = "‹";
+}
+function closeMobileSidebar() {
+  document.getElementById("sidebar").classList.remove("mobile-open");
+  document.getElementById("mobileBackdrop").style.display = "none";
+  document.getElementById("sidebarHandleBtn").textContent = "›";
+}
+document.getElementById("sidebarHandleBtn").onclick = () => {
+  const isOpen = document.getElementById("sidebar").classList.contains("mobile-open");
+  if (isOpen) closeMobileSidebar(); else openMobileSidebar();
+};
+document.getElementById("mobileBackdrop").onclick = closeMobileSidebar;
 
 document.getElementById("outlookBtn").onclick = () => {
   document.getElementById("outlookModal").classList.add("open");
@@ -1262,6 +1753,18 @@ document.getElementById("sendSubmitBtn").onclick = async () => {
   } finally {
     btn.disabled = false;
   }
+};
+
+document.getElementById("projectSearchInput").addEventListener("input", (e) => {
+  projectSearch = e.target.value;
+  document.getElementById("projectSearchClear").style.display = projectSearch ? "block" : "none";
+  renderProjectList();
+});
+document.getElementById("projectSearchClear").onclick = () => {
+  projectSearch = "";
+  document.getElementById("projectSearchInput").value = "";
+  document.getElementById("projectSearchClear").style.display = "none";
+  renderProjectList();
 };
 
 loadAppSettings();
