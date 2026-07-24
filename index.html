@@ -130,6 +130,12 @@
   .row-name { font-size: 13.5px; color: var(--ink); overflow-wrap: break-word; word-break: break-word; }
   .row-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--slate-soft); margin-top: 2px; display: flex; gap: 10px; align-items: center; }
   .tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 3px; background: rgba(79,122,93,0.12); color: var(--success); }
+  .tag-wechat { background: rgba(7,193,96,0.12); color: #07a651; }
+  .wechat-add-btn {
+    display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none;
+    color: var(--slate-soft); font-size: 12px; padding: 6px 2px; margin-bottom: 26px; cursor: pointer;
+  }
+  .wechat-add-btn:hover { color: #07a651; }
   .row-actions { display: flex; gap: 4px; flex-shrink: 0; }
   .icon-btn {
     width: 30px; height: 30px; border-radius: 5px; border: none; background: transparent; color: var(--slate-soft);
@@ -769,7 +775,7 @@ function renderFileList() {
         <span class="col-name details-name clickable-name">📄 ${esc(f.file_name)}</span>
         <span class="col-size">${fmtBytes(f.size_bytes)}</span>
         <span class="col-date">${fmtDate(f.uploaded_at)}</span>
-        <span class="col-source">${f.source === "outlook" ? '<span class="tag">Outlook</span>' : "—"}</span>
+        <span class="col-source">${f.source === "outlook" ? '<span class="tag">Outlook</span>' : f.source === "wechat" ? '<span class="tag tag-wechat">WeChat</span>' : "—"}</span>
         <span class="col-actions">${fileActionsHtml(f)}</span>
       `;
       row.querySelector(".details-name").onclick = () => openPreview(f);
@@ -796,6 +802,7 @@ function renderFileList() {
           <span>${fmtBytes(f.size_bytes)}</span>
           <span>${fmtDate(f.uploaded_at)}</span>
           ${f.source === "outlook" ? '<span class="tag">Outlook</span>' : ""}
+          ${f.source === "wechat" ? '<span class="tag tag-wechat">WeChat</span>' : ""}
         </div>
       </div>
       <div class="row-actions">${fileActionsHtml(f, 15)}</div>
@@ -1026,6 +1033,18 @@ function renderBody(project) {
   body.appendChild(dz);
   body.appendChild(input);
 
+  const wechatBtn = document.createElement("button");
+  wechatBtn.className = "wechat-add-btn";
+  wechatBtn.innerHTML = "💬 Add from WeChat";
+  const wechatInput = document.createElement("input");
+  wechatInput.type = "file";
+  wechatInput.multiple = true;
+  wechatInput.style.display = "none";
+  wechatInput.onchange = (e) => handleFiles(e.target.files, "wechat");
+  wechatBtn.onclick = () => wechatInput.click();
+  body.appendChild(wechatBtn);
+  body.appendChild(wechatInput);
+
   const breadcrumbEl = document.createElement("div");
   breadcrumbEl.className = "breadcrumb";
   breadcrumbEl.id = "breadcrumb";
@@ -1153,7 +1172,7 @@ async function handleDeleteContact(contact) {
   }
 }
 
-async function handleFiles(fileList) {
+async function handleFiles(fileList, source) {
   if (!activeId || !fileList || fileList.length === 0) return;
   const dzIcon = document.getElementById("dzIcon");
   const dzText = document.getElementById("dzText");
@@ -1162,7 +1181,7 @@ async function handleFiles(fileList) {
 
   try {
     for (const file of Array.from(fileList)) {
-      await uploadOne(activeId, file);
+      await uploadOne(activeId, file, source);
     }
     await loadFiles();
   } catch (e) {
@@ -1172,7 +1191,7 @@ async function handleFiles(fileList) {
   }
 }
 
-async function uploadOne(projectId, file) {
+async function uploadOne(projectId, file, source) {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const storagePath = `${projectId}/${Date.now()}-${safeName}`;
   const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/project-files/${storagePath}`, {
@@ -1194,7 +1213,7 @@ async function uploadOne(projectId, file) {
       storage_path: storagePath,
       size_bytes: file.size,
       content_type: file.type || null,
-      source: "manual",
+      source: source || "manual",
     }),
   });
   if (!insertRes.ok) throw new Error(`Uploaded ${file.name} but could not save its record`);
