@@ -323,6 +323,28 @@
   .clickable-name:hover { color: var(--brass); }
 
   .preview-modal { max-width: 720px; }
+
+  .dashboard-modal { max-width: 640px; }
+  .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; margin-bottom: 24px; }
+  .dash-stat { background: rgba(255,255,255,0.6); border: 1px solid var(--paper-line); border-radius: 14px; padding: 14px 10px; text-align: center; }
+  .dash-stat-num { font-family: 'Inter', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); }
+  .dash-stat-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--slate-soft); margin-top: 4px; }
+  .dash-stat-todo .dash-stat-num { color: var(--slate-soft); }
+  .dash-stat-progress .dash-stat-num { color: var(--brass); }
+  .dash-stat-done .dash-stat-num { color: var(--success); }
+  .dash-section-title { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--slate-soft); margin: 0 0 12px; }
+  .dash-project-list { display: flex; flex-direction: column; gap: 14px; max-height: 320px; overflow-y: auto; }
+  .dash-project-row { cursor: pointer; padding: 10px 12px; border: 1px solid var(--paper-line); border-radius: 12px; transition: border-color 0.12s ease, background 0.12s ease; }
+  .dash-project-row:hover { border-color: var(--brass); background: rgba(109,94,245,0.04); }
+  .dash-project-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .dash-project-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .dash-project-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--slate-soft); }
+  .dash-bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--paper-line); margin-bottom: 6px; }
+  .dash-bar-seg { display: block; height: 100%; }
+  .bar-done { background: var(--success); }
+  .bar-progress { background: var(--brass); }
+  .bar-todo { background: var(--slate-soft); opacity: 0.4; }
+  .dash-project-meta { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--slate-soft); }
   .preview-body {
     margin-top: 14px; border-radius: 8px; background: var(--paper); display: flex;
     align-items: center; justify-content: center; min-height: 160px; overflow: hidden;
@@ -551,6 +573,7 @@
       <div id="addFormWrap">
         <button class="btn-ghost" id="showAddBtn">+ Add project</button>
       </div>
+      <button class="btn-ghost outlook" id="dashboardBtn">📊 Dashboard</button>
       <button class="btn-ghost outlook" id="outlookBtn">✉ Connect Outlook</button>
     </div>
   </aside>
@@ -585,6 +608,17 @@
     <div class="modal-sub" id="previewMeta"></div>
     <div class="preview-body" id="previewBody"></div>
     <div class="preview-actions" id="previewActions"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="dashboardModal">
+  <div class="modal dashboard-modal">
+    <button class="modal-close" id="closeDashboardBtn">✕</button>
+    <div class="modal-title">📊 Tasks dashboard</div>
+    <div class="modal-sub" id="dashboardSub"></div>
+    <div id="dashboardBody">
+      <div class="loading-center"><span class="spin">↻</span> Loading…</div>
+    </div>
   </div>
 </div>
 
@@ -1929,6 +1963,99 @@ document.getElementById("closeModalBtn").onclick = () => {
 document.getElementById("outlookModal").onclick = (e) => {
   if (e.target.id === "outlookModal") e.currentTarget.classList.remove("open");
 };
+
+document.getElementById("dashboardBtn").onclick = openDashboard;
+document.getElementById("closeDashboardBtn").onclick = () => {
+  document.getElementById("dashboardModal").classList.remove("open");
+};
+document.getElementById("dashboardModal").onclick = (e) => {
+  if (e.target.id === "dashboardModal") e.currentTarget.classList.remove("open");
+};
+
+async function openDashboard() {
+  document.getElementById("dashboardModal").classList.add("open");
+  document.getElementById("dashboardSub").textContent = `Every task across all ${projects.length} projects.`;
+  document.getElementById("dashboardBody").innerHTML = `<div class="loading-center"><span class="spin">↻</span> Loading…</div>`;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?select=*&order=created_at.desc`, { headers: H });
+    if (!res.ok) throw new Error("Could not load tasks");
+    const allTasks = await res.json();
+    renderDashboard(allTasks);
+  } catch (e) {
+    document.getElementById("dashboardBody").innerHTML = `<div class="empty">Could not load tasks.</div>`;
+  }
+}
+
+function renderDashboard(allTasks) {
+  const total = allTasks.length;
+  const todo = allTasks.filter((t) => t.status === "todo").length;
+  const inProgress = allTasks.filter((t) => t.status === "in_progress").length;
+  const done = allTasks.filter((t) => t.status === "done").length;
+
+  const byProject = projects
+    .map((p) => {
+      const pTasks = allTasks.filter((t) => t.project_id === p.id);
+      return {
+        project: p,
+        total: pTasks.length,
+        todo: pTasks.filter((t) => t.status === "todo").length,
+        in_progress: pTasks.filter((t) => t.status === "in_progress").length,
+        done: pTasks.filter((t) => t.status === "done").length,
+      };
+    })
+    .filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  let html = `
+    <div class="dash-stats">
+      <div class="dash-stat"><div class="dash-stat-num">${total}</div><div class="dash-stat-label">Total tasks</div></div>
+      <div class="dash-stat dash-stat-todo"><div class="dash-stat-num">${todo}</div><div class="dash-stat-label">To do</div></div>
+      <div class="dash-stat dash-stat-progress"><div class="dash-stat-num">${inProgress}</div><div class="dash-stat-label">In progress</div></div>
+      <div class="dash-stat dash-stat-done"><div class="dash-stat-num">${done}</div><div class="dash-stat-label">Done</div></div>
+    </div>
+    <h4 class="dash-section-title">By project</h4>
+  `;
+
+  if (byProject.length === 0) {
+    html += `<div class="empty compact">No tasks recorded yet in any project.</div>`;
+  } else {
+    html += `<div class="dash-project-list">`;
+    byProject.forEach((row) => {
+      const pct = row.total ? Math.round((row.done / row.total) * 100) : 0;
+      html += `
+        <div class="dash-project-row" data-project-id="${row.project.id}">
+          <div class="dash-project-top">
+            <span class="dash-project-name">${esc(row.project.name)}</span>
+            <span class="dash-project-count">${row.total} task${row.total === 1 ? "" : "s"}</span>
+          </div>
+          <div class="dash-bar">
+            ${row.done > 0 ? `<span class="dash-bar-seg bar-done" style="width:${(row.done / row.total) * 100}%"></span>` : ""}
+            ${row.in_progress > 0 ? `<span class="dash-bar-seg bar-progress" style="width:${(row.in_progress / row.total) * 100}%"></span>` : ""}
+            ${row.todo > 0 ? `<span class="dash-bar-seg bar-todo" style="width:${(row.todo / row.total) * 100}%"></span>` : ""}
+          </div>
+          <div class="dash-project-meta">${row.todo} to do · ${row.in_progress} in progress · ${row.done} done (${pct}% complete)</div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  const body = document.getElementById("dashboardBody");
+  body.innerHTML = html;
+  body.querySelectorAll(".dash-project-row").forEach((row) => {
+    row.onclick = () => {
+      activeId = row.dataset.projectId;
+      currentFolderId = null;
+      folderPath = [];
+      expandedTaskId = null;
+      addingTask = false;
+      renderProjectList();
+      loadFiles();
+      document.getElementById("dashboardModal").classList.remove("open");
+      closeMobileSidebar();
+    };
+  });
+}
 
 document.getElementById("brandLogo").src = LOGO_DATA_URI;
 
