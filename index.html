@@ -340,11 +340,28 @@
   .dash-project-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
   .dash-project-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--slate-soft); }
   .dash-bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--paper-line); margin-bottom: 6px; }
-  .dash-bar-seg { display: block; height: 100%; }
-  .bar-done { background: var(--success); }
-  .bar-progress { background: var(--brass); }
-  .bar-todo { background: var(--slate-soft); opacity: 0.4; }
-  .dash-project-meta { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--slate-soft); }
+  .dash-stat-clickable { border: 1px solid var(--paper-line); cursor: pointer; font-family: inherit; transition: border-color 0.12s ease, transform 0.12s ease; }
+  .dash-stat-clickable:hover { border-color: var(--success); transform: translateY(-1px); }
+  .dash-project-group { border: 1px solid var(--paper-line); border-radius: 12px; overflow: hidden; }
+  .dash-project-top-clickable { cursor: pointer; padding: 10px 12px; margin: 0; background: rgba(0,0,0,0.02); }
+  .dash-project-top-clickable:hover { background: rgba(109,94,245,0.06); }
+  .dash-task-list { display: flex; flex-direction: column; }
+  .dash-task-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--paper-line); font-size: 12.5px; }
+  .dash-task-title { flex: 1; color: var(--ink); overflow-wrap: break-word; word-break: break-word; }
+  .dash-task-link { color: var(--slate-soft); text-decoration: none; }
+  .dash-task-link:hover { color: var(--brass); }
+  .archive-list { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
+  .archive-group { border: 1px solid var(--paper-line); border-radius: 12px; overflow: hidden; }
+  .archive-group-head { width: 100%; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.02); border: none; padding: 10px 12px; cursor: pointer; text-align: left; }
+  .archive-group-head:hover { background: rgba(109,94,245,0.06); }
+  .archive-chevron { display: inline-block; transition: transform 0.15s ease; color: var(--slate-soft); }
+  .archive-chevron.expanded { transform: rotate(90deg); }
+  .archive-task-list { display: flex; flex-direction: column; }
+  .archive-task-row { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--paper-line); font-size: 12.5px; }
+  .archive-check { color: var(--success); flex-shrink: 0; }
+  .archive-task-title { flex: 1; color: var(--slate); text-decoration: line-through; text-decoration-color: var(--paper-line); overflow-wrap: break-word; word-break: break-word; }
+  .archive-restore { background: none; border: none; color: var(--brass); font-size: 11.5px; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+  .archive-restore:hover { text-decoration: underline; }
   .preview-body {
     margin-top: 14px; border-radius: 8px; background: var(--paper); display: flex;
     align-items: center; justify-content: center; min-height: 160px; overflow: hidden;
@@ -617,6 +634,17 @@
     <div class="modal-title">📊 Tasks dashboard</div>
     <div class="modal-sub" id="dashboardSub"></div>
     <div id="dashboardBody">
+      <div class="loading-center"><span class="spin">↻</span> Loading…</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="archiveModal">
+  <div class="modal dashboard-modal">
+    <button class="modal-close" id="closeArchiveBtn">✕</button>
+    <div class="modal-title">✓ Archived tasks</div>
+    <div class="modal-sub">Completed tasks, grouped by project. Click a project to expand it.</div>
+    <div id="archiveBody">
       <div class="loading-center"><span class="spin">↻</span> Loading…</div>
     </div>
   </div>
@@ -1223,11 +1251,13 @@ function renderTaskPanel() {
     return;
   }
 
-  if (tasks.length === 0 && !addingTask) {
-    html += `<div class="empty compact">No tasks yet for ${esc(project.name)}.</div>`;
-  } else if (tasks.length > 0) {
+  const openTasks = tasks.filter((t) => t.status !== "done");
+
+  if (openTasks.length === 0 && !addingTask) {
+    html += `<div class="empty compact">No open tasks for ${esc(project.name)}.${tasks.length > openTasks.length ? " Completed tasks are archived — see the dashboard." : ""}</div>`;
+  } else if (openTasks.length > 0) {
     html += `<div class="task-list">`;
-    tasks.forEach((task) => {
+    openTasks.forEach((task) => {
       const commentCount = (taskComments[task.id] || []).length;
       html += `
         <div class="task-item" data-task-id="${task.id}">
@@ -1972,9 +2002,19 @@ document.getElementById("dashboardModal").onclick = (e) => {
   if (e.target.id === "dashboardModal") e.currentTarget.classList.remove("open");
 };
 
+document.getElementById("closeArchiveBtn").onclick = () => {
+  document.getElementById("archiveModal").classList.remove("open");
+};
+document.getElementById("archiveModal").onclick = (e) => {
+  if (e.target.id === "archiveModal") e.currentTarget.classList.remove("open");
+};
+
+const TASK_STATUS_LABEL_HTML = { todo: "To do", in_progress: "In progress", done: "Done" };
+let expandedArchiveProjects = {};
+
 async function openDashboard() {
   document.getElementById("dashboardModal").classList.add("open");
-  document.getElementById("dashboardSub").textContent = `Every task across all ${projects.length} projects.`;
+  document.getElementById("dashboardSub").textContent = `Open work across all ${projects.length} projects. Completed tasks are archived.`;
   document.getElementById("dashboardBody").innerHTML = `<div class="loading-center"><span class="spin">↻</span> Loading…</div>`;
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?select=*&order=created_at.desc`, { headers: H });
@@ -1987,7 +2027,6 @@ async function openDashboard() {
 }
 
 function renderDashboard(allTasks) {
-  const total = allTasks.length;
   const todo = allTasks.filter((t) => t.status === "todo").length;
   const inProgress = allTasks.filter((t) => t.status === "in_progress").length;
   const done = allTasks.filter((t) => t.status === "done").length;
@@ -1995,45 +2034,43 @@ function renderDashboard(allTasks) {
   const byProject = projects
     .map((p) => {
       const pTasks = allTasks.filter((t) => t.project_id === p.id);
-      return {
-        project: p,
-        total: pTasks.length,
-        todo: pTasks.filter((t) => t.status === "todo").length,
-        in_progress: pTasks.filter((t) => t.status === "in_progress").length,
-        done: pTasks.filter((t) => t.status === "done").length,
-      };
+      const openTasksList = pTasks
+        .filter((t) => t.status !== "done")
+        .sort((a, b) => (a.status === b.status ? 0 : a.status === "in_progress" ? -1 : 1));
+      return { project: p, openTasksList };
     })
-    .filter((row) => row.total > 0)
-    .sort((a, b) => b.total - a.total);
+    .filter((row) => row.openTasksList.length > 0)
+    .sort((a, b) => b.openTasksList.length - a.openTasksList.length);
 
   let html = `
     <div class="dash-stats">
-      <div class="dash-stat"><div class="dash-stat-num">${total}</div><div class="dash-stat-label">Total tasks</div></div>
       <div class="dash-stat dash-stat-todo"><div class="dash-stat-num">${todo}</div><div class="dash-stat-label">To do</div></div>
       <div class="dash-stat dash-stat-progress"><div class="dash-stat-num">${inProgress}</div><div class="dash-stat-label">In progress</div></div>
-      <div class="dash-stat dash-stat-done"><div class="dash-stat-num">${done}</div><div class="dash-stat-label">Done</div></div>
+      <button class="dash-stat dash-stat-done dash-stat-clickable" id="dashDoneStat"><div class="dash-stat-num">${done}</div><div class="dash-stat-label">Done · view archive</div></button>
     </div>
-    <h4 class="dash-section-title">By project</h4>
+    <h4 class="dash-section-title">To do &amp; in progress, by project</h4>
   `;
 
   if (byProject.length === 0) {
-    html += `<div class="empty compact">No tasks recorded yet in any project.</div>`;
+    html += `<div class="empty compact">Nothing open right now — everything's either done or there are no tasks yet.</div>`;
   } else {
     html += `<div class="dash-project-list">`;
     byProject.forEach((row) => {
-      const pct = row.total ? Math.round((row.done / row.total) * 100) : 0;
       html += `
-        <div class="dash-project-row" data-project-id="${row.project.id}">
-          <div class="dash-project-top">
+        <div class="dash-project-group">
+          <div class="dash-project-top dash-project-top-clickable" data-project-id="${row.project.id}">
             <span class="dash-project-name">${esc(row.project.name)}</span>
-            <span class="dash-project-count">${row.total} task${row.total === 1 ? "" : "s"}</span>
+            <span class="dash-project-count">${row.openTasksList.length} open task${row.openTasksList.length === 1 ? "" : "s"}</span>
           </div>
-          <div class="dash-bar">
-            ${row.done > 0 ? `<span class="dash-bar-seg bar-done" style="width:${(row.done / row.total) * 100}%"></span>` : ""}
-            ${row.in_progress > 0 ? `<span class="dash-bar-seg bar-progress" style="width:${(row.in_progress / row.total) * 100}%"></span>` : ""}
-            ${row.todo > 0 ? `<span class="dash-bar-seg bar-todo" style="width:${(row.todo / row.total) * 100}%"></span>` : ""}
+          <div class="dash-task-list">
+            ${row.openTasksList.map((task) => `
+              <div class="dash-task-row">
+                <span class="task-status task-status-${task.status}">${TASK_STATUS_LABEL_HTML[task.status]}</span>
+                <span class="dash-task-title">${esc(task.title)}</span>
+                ${task.url ? `<a class="dash-task-link" href="${esc(task.url)}" target="_blank" rel="noreferrer">🔗</a>` : ""}
+              </div>
+            `).join("")}
           </div>
-          <div class="dash-project-meta">${row.todo} to do · ${row.in_progress} in progress · ${row.done} done (${pct}% complete)</div>
         </div>
       `;
     });
@@ -2042,7 +2079,11 @@ function renderDashboard(allTasks) {
 
   const body = document.getElementById("dashboardBody");
   body.innerHTML = html;
-  body.querySelectorAll(".dash-project-row").forEach((row) => {
+
+  const doneStat = document.getElementById("dashDoneStat");
+  if (doneStat) doneStat.onclick = openArchive;
+
+  body.querySelectorAll(".dash-project-top-clickable").forEach((row) => {
     row.onclick = () => {
       activeId = row.dataset.projectId;
       currentFolderId = null;
@@ -2055,6 +2096,94 @@ function renderDashboard(allTasks) {
       closeMobileSidebar();
     };
   });
+}
+
+let archivedTasksCache = [];
+
+async function openArchive() {
+  document.getElementById("archiveModal").classList.add("open");
+  document.getElementById("archiveBody").innerHTML = `<div class="loading-center"><span class="spin">↻</span> Loading…</div>`;
+  expandedArchiveProjects = {};
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?status=eq.done&select=*&order=created_at.desc`, { headers: H });
+    if (!res.ok) throw new Error("Could not load archived tasks");
+    archivedTasksCache = await res.json();
+    renderArchive();
+  } catch (e) {
+    document.getElementById("archiveBody").innerHTML = `<div class="empty">Could not load archived tasks.</div>`;
+  }
+}
+
+function renderArchive() {
+  const byProject = projects
+    .map((p) => ({ project: p, tasks: archivedTasksCache.filter((t) => t.project_id === p.id) }))
+    .filter((row) => row.tasks.length > 0);
+
+  const body = document.getElementById("archiveBody");
+
+  if (byProject.length === 0) {
+    body.innerHTML = `<div class="empty compact">No completed tasks yet.</div>`;
+    return;
+  }
+
+  let html = `<div class="archive-list">`;
+  byProject.forEach((row) => {
+    const isExpanded = !!expandedArchiveProjects[row.project.id];
+    html += `
+      <div class="archive-group">
+        <button class="archive-group-head" data-project-id="${row.project.id}">
+          <span class="archive-chevron ${isExpanded ? "expanded" : ""}">›</span>
+          <span class="dash-project-name">${esc(row.project.name)}</span>
+          <span class="dash-project-count">${row.tasks.length} done</span>
+        </button>
+        ${isExpanded ? `
+          <div class="archive-task-list">
+            ${row.tasks.map((task) => `
+              <div class="archive-task-row">
+                <span class="archive-check">✓</span>
+                <span class="archive-task-title">${esc(task.title)}</span>
+                ${task.url ? `<a class="dash-task-link" href="${esc(task.url)}" target="_blank" rel="noreferrer">🔗</a>` : ""}
+                <button class="archive-restore" data-task-id="${task.id}">Restore</button>
+              </div>
+            `).join("")}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  });
+  html += `</div>`;
+  body.innerHTML = html;
+
+  body.querySelectorAll(".archive-group-head").forEach((btn) => {
+    btn.onclick = () => {
+      const pid = btn.dataset.projectId;
+      expandedArchiveProjects[pid] = !expandedArchiveProjects[pid];
+      renderArchive();
+    };
+  });
+  body.querySelectorAll(".archive-restore").forEach((btn) => {
+    btn.onclick = () => handleRestoreTask(btn.dataset.taskId);
+  });
+}
+
+async function handleRestoreTask(taskId) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?id=eq.${taskId}`, {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, H),
+      body: JSON.stringify({ status: "todo" }),
+    });
+    if (!res.ok) throw new Error("Could not restore task");
+    archivedTasksCache = archivedTasksCache.filter((t) => t.id !== taskId);
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.status = "todo";
+      renderTaskPanel();
+    }
+    renderArchive();
+  } catch (e) {
+    showError("Could not restore task");
+  }
 }
 
 document.getElementById("brandLogo").src = LOGO_DATA_URI;
