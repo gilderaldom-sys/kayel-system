@@ -433,6 +433,22 @@
   .task-status-todo { background: rgba(107,114,128,0.14); color: var(--slate-soft); }
   .task-status-in_progress { background: rgba(109,94,245,0.18); color: var(--brass); }
   .task-status-done { background: rgba(16,185,129,0.16); color: var(--success); }
+
+  .task-meta-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .priority-select {
+    border: none; border-radius: 999px; padding: 3px 9px; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; cursor: pointer; outline: none;
+  }
+  .priority-low { background: rgba(107,114,128,0.14); color: var(--slate-soft); }
+  .priority-medium { background: rgba(109,94,245,0.14); color: var(--brass); }
+  .priority-high { background: rgba(239,68,68,0.14); color: var(--danger); }
+  .date-input {
+    border: 1px solid var(--paper-line); border-radius: 8px; padding: 3px 8px; font-size: 10.5px;
+    font-family: 'Inter', sans-serif; color: var(--slate); background: #fff; outline: none; flex: 1;
+  }
+  .date-input:focus { border-color: var(--brass); }
+  .task-form-row { display: flex; gap: 8px; }
+  .dash-date-input { flex: 0 0 auto; width: 118px; padding: 3px 6px; font-size: 10.5px; }
   .task-title { font-size: 13.5px; color: var(--ink); cursor: pointer; margin-bottom: 4px; overflow-wrap: break-word; word-break: break-word; }
   .task-title:hover { color: var(--brass); }
   .task-url {
@@ -1150,13 +1166,16 @@ async function loadTasks() {
   }
 }
 
-async function handleAddTask(title, url, status) {
+async function handleAddTask(title, url, status, priority, dueDate) {
   if (!title || !activeId) return;
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks`, {
       method: "POST",
       headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
-      body: JSON.stringify({ project_id: activeId, title, url: url || null, status, sort_order: tasks.length }),
+      body: JSON.stringify({
+        project_id: activeId, title, url: url || null, status,
+        priority: priority || "medium", due_date: dueDate || null, sort_order: tasks.length,
+      }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1171,12 +1190,12 @@ async function handleAddTask(title, url, status) {
   }
 }
 
-async function handleUpdateTaskStatus(task, status) {
+async function handleUpdateTaskField(task, fields) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?id=eq.${task.id}`, {
       method: "PATCH",
       headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(fields),
     });
     if (!res.ok) throw new Error("Could not update task");
     const [updated] = await res.json();
@@ -1185,6 +1204,10 @@ async function handleUpdateTaskStatus(task, status) {
   } catch (e) {
     showError(e.message);
   }
+}
+
+function handleUpdateTaskStatus(task, status) {
+  return handleUpdateTaskField(task, { status });
 }
 
 async function handleDeleteTask(task) {
@@ -1275,6 +1298,14 @@ function renderTaskPanel() {
             </select>
             <button class="icon-btn danger task-delete-btn" data-task-id="${task.id}" title="Delete task">🗑</button>
           </div>
+          <div class="task-meta-row">
+            <select class="priority-select priority-${task.priority || "medium"}" data-task-id="${task.id}" data-field="priority">
+              <option value="low" ${(task.priority || "medium") === "low" ? "selected" : ""}>Low</option>
+              <option value="medium" ${(task.priority || "medium") === "medium" ? "selected" : ""}>Medium</option>
+              <option value="high" ${(task.priority || "medium") === "high" ? "selected" : ""}>High</option>
+            </select>
+            <input type="date" class="date-input" data-task-id="${task.id}" data-field="due_date" value="${task.due_date || ""}" />
+          </div>
           <div class="task-title task-title-toggle" data-task-id="${task.id}">${esc(task.title)}</div>
           ${task.url ? `<a class="task-url" href="${esc(task.url)}" target="_blank" rel="noreferrer">🔗 ${esc(task.url)}</a>` : ""}
           <button class="task-comments-toggle" data-task-id="${task.id}">💬 ${commentCount > 0 ? `${commentCount} comment${commentCount === 1 ? "" : "s"}` : "Add comment"}</button>
@@ -1308,6 +1339,14 @@ function renderTaskPanel() {
           <option value="in_progress">In progress</option>
           <option value="done">Done</option>
         </select>
+        <div class="task-form-row">
+          <select class="contact-select priority-select priority-medium" id="newTaskPriorityInput">
+            <option value="low">Low priority</option>
+            <option value="medium" selected>Medium priority</option>
+            <option value="high">High priority</option>
+          </select>
+          <input type="date" class="contact-input date-input" id="newTaskDueDateInput" />
+        </div>
         <div class="task-add-actions">
           <button type="submit" class="preview-btn">Add task</button>
           <button type="button" class="icon-btn" id="cancelTaskBtn">✕</button>
@@ -1326,12 +1365,18 @@ function renderTaskPanel() {
   if (cancelBtn) cancelBtn.onclick = () => { addingTask = false; renderTaskPanel(); };
   const addForm = document.getElementById("taskAddForm");
   if (addForm) {
+    const prioritySelectEl = document.getElementById("newTaskPriorityInput");
+    prioritySelectEl.onchange = () => {
+      prioritySelectEl.className = `contact-select priority-select priority-${prioritySelectEl.value}`;
+    };
     addForm.onsubmit = (e) => {
       e.preventDefault();
       const title = document.getElementById("newTaskTitleInput").value.trim();
       const url = document.getElementById("newTaskUrlInput").value.trim();
       const status = document.getElementById("newTaskStatusInput").value;
-      handleAddTask(title, url, status);
+      const priority = document.getElementById("newTaskPriorityInput").value;
+      const dueDate = document.getElementById("newTaskDueDateInput").value;
+      handleAddTask(title, url, status, priority, dueDate);
     };
     document.getElementById("newTaskTitleInput").focus();
   }
@@ -1340,6 +1385,16 @@ function renderTaskPanel() {
     sel.onchange = () => {
       const task = tasks.find((t) => t.id === sel.dataset.taskId);
       if (task) handleUpdateTaskStatus(task, sel.value);
+    };
+  });
+  wrap.querySelectorAll(".task-meta-row .priority-select, .task-meta-row .date-input").forEach((el) => {
+    el.onchange = () => {
+      const task = tasks.find((t) => t.id === el.dataset.taskId);
+      if (!task) return;
+      const field = el.dataset.field;
+      const value = field === "due_date" ? (el.value || null) : el.value;
+      if (field === "priority") el.className = `priority-select priority-${el.value}`;
+      handleUpdateTaskField(task, { [field]: value });
     };
   });
   wrap.querySelectorAll(".task-delete-btn").forEach((btn) => {
@@ -2034,6 +2089,8 @@ async function openDashboard() {
 
 let dashboardTasksCache = [];
 
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+
 function renderDashboard(allTasks) {
   dashboardTasksCache = allTasks;
   const todo = allTasks.filter((t) => t.status === "todo").length;
@@ -2045,7 +2102,11 @@ function renderDashboard(allTasks) {
       const pTasks = allTasks.filter((t) => t.project_id === p.id);
       const openTasksList = pTasks
         .filter((t) => t.status !== "done")
-        .sort((a, b) => (a.status === b.status ? 0 : a.status === "in_progress" ? -1 : 1));
+        .sort((a, b) => {
+          const pDiff = PRIORITY_RANK[a.priority || "medium"] - PRIORITY_RANK[b.priority || "medium"];
+          if (pDiff !== 0) return pDiff;
+          return a.status === b.status ? 0 : a.status === "in_progress" ? -1 : 1;
+        });
       return { project: p, openTasksList };
     })
     .filter((row) => row.openTasksList.length > 0)
@@ -2079,7 +2140,13 @@ function renderDashboard(allTasks) {
                   <option value="in_progress" ${task.status === "in_progress" ? "selected" : ""}>In progress</option>
                   <option value="done" ${task.status === "done" ? "selected" : ""}>Done</option>
                 </select>
+                <select class="priority-select priority-${task.priority || "medium"} dash-priority-select" data-task-id="${task.id}" data-project-id="${task.project_id}">
+                  <option value="low" ${(task.priority || "medium") === "low" ? "selected" : ""}>Low</option>
+                  <option value="medium" ${(task.priority || "medium") === "medium" ? "selected" : ""}>Medium</option>
+                  <option value="high" ${(task.priority || "medium") === "high" ? "selected" : ""}>High</option>
+                </select>
                 <span class="dash-task-title">${esc(task.title)}</span>
+                <input type="date" class="date-input dash-date-input dash-date-field" data-task-id="${task.id}" data-project-id="${task.project_id}" value="${task.due_date || ""}" />
                 <span class="dash-task-project" data-jump-project-id="${row.project.id}">${esc(row.project.name)}</span>
                 ${task.url ? `<a class="dash-task-link" href="${esc(task.url)}" target="_blank" rel="noreferrer">🔗</a>` : ""}
               </div>
@@ -2113,7 +2180,20 @@ function renderDashboard(allTasks) {
 
   body.querySelectorAll(".dash-task-row .task-status").forEach((sel) => {
     sel.onclick = (e) => e.stopPropagation();
-    sel.onchange = () => handleDashboardTaskStatusChange(sel.dataset.taskId, sel.dataset.projectId, sel.value);
+    sel.onchange = () => handleDashboardTaskFieldChange(sel.dataset.taskId, sel.dataset.projectId, { status: sel.value });
+  });
+
+  body.querySelectorAll(".dash-task-row .dash-priority-select").forEach((sel) => {
+    sel.onclick = (e) => e.stopPropagation();
+    sel.onchange = () => {
+      sel.className = `priority-select priority-${sel.value} dash-priority-select`;
+      handleDashboardTaskFieldChange(sel.dataset.taskId, sel.dataset.projectId, { priority: sel.value });
+    };
+  });
+
+  body.querySelectorAll(".dash-task-row .dash-date-field").forEach((input) => {
+    input.onclick = (e) => e.stopPropagation();
+    input.onchange = () => handleDashboardTaskFieldChange(input.dataset.taskId, input.dataset.projectId, { due_date: input.value || null });
   });
 
   body.querySelectorAll(".dash-task-project").forEach((tag) => {
@@ -2133,12 +2213,12 @@ function renderDashboard(allTasks) {
   });
 }
 
-async function handleDashboardTaskStatusChange(taskId, projectId, status) {
+async function handleDashboardTaskFieldChange(taskId, projectId, fields) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?id=eq.${taskId}`, {
       method: "PATCH",
       headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(fields),
     });
     if (!res.ok) throw new Error("Could not update task");
     const [updated] = await res.json();
@@ -2146,7 +2226,7 @@ async function handleDashboardTaskStatusChange(taskId, projectId, status) {
     if (projectId === activeId) {
       const task = tasks.find((t) => t.id === updated.id);
       if (task) {
-        task.status = updated.status;
+        Object.assign(task, updated);
         renderTaskPanel();
       }
     }
