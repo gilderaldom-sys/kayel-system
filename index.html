@@ -434,7 +434,7 @@
   .task-status-in_progress { background: rgba(109,94,245,0.18); color: var(--brass); }
   .task-status-done { background: rgba(16,185,129,0.16); color: var(--success); }
 
-  .task-meta-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .task-meta-row { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-bottom: 6px; }
   .priority-select {
     border: none; border-radius: 999px; padding: 3px 9px; font-family: 'JetBrains Mono', monospace;
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; cursor: pointer; outline: none;
@@ -444,10 +444,11 @@
   .priority-high { background: rgba(239,68,68,0.14); color: var(--danger); }
   .date-input {
     border: 1px solid var(--paper-line); border-radius: 8px; padding: 3px 8px; font-size: 10.5px;
-    font-family: 'Inter', sans-serif; color: var(--slate); background: #fff; outline: none; flex: 1;
+    font-family: 'Inter', sans-serif; color: var(--slate); background: #fff; outline: none; width: 140px;
   }
   .date-input:focus { border-color: var(--brass); }
-  .task-form-row { display: flex; gap: 8px; }
+  .task-form-row { display: flex; flex-direction: column; gap: 8px; }
+  .dash-priority-date-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex-shrink: 0; }
   .dash-date-input { flex: 0 0 auto; width: 118px; padding: 3px 6px; font-size: 10.5px; }
   .task-title { font-size: 13.5px; color: var(--ink); cursor: pointer; margin-bottom: 4px; overflow-wrap: break-word; word-break: break-word; }
   .task-title:hover { color: var(--brass); }
@@ -2140,13 +2141,15 @@ function renderDashboard(allTasks) {
                   <option value="in_progress" ${task.status === "in_progress" ? "selected" : ""}>In progress</option>
                   <option value="done" ${task.status === "done" ? "selected" : ""}>Done</option>
                 </select>
-                <select class="priority-select priority-${task.priority || "medium"} dash-priority-select" data-task-id="${task.id}" data-project-id="${task.project_id}">
-                  <option value="low" ${(task.priority || "medium") === "low" ? "selected" : ""}>Low</option>
-                  <option value="medium" ${(task.priority || "medium") === "medium" ? "selected" : ""}>Medium</option>
-                  <option value="high" ${(task.priority || "medium") === "high" ? "selected" : ""}>High</option>
-                </select>
+                <div class="dash-priority-date-stack">
+                  <select class="priority-select priority-${task.priority || "medium"} dash-priority-select" data-task-id="${task.id}" data-project-id="${task.project_id}">
+                    <option value="low" ${(task.priority || "medium") === "low" ? "selected" : ""}>Low</option>
+                    <option value="medium" ${(task.priority || "medium") === "medium" ? "selected" : ""}>Medium</option>
+                    <option value="high" ${(task.priority || "medium") === "high" ? "selected" : ""}>High</option>
+                  </select>
+                  <input type="date" class="date-input dash-date-input dash-date-field" data-task-id="${task.id}" data-project-id="${task.project_id}" value="${task.due_date || ""}" />
+                </div>
                 <span class="dash-task-title">${esc(task.title)}</span>
-                <input type="date" class="date-input dash-date-input dash-date-field" data-task-id="${task.id}" data-project-id="${task.project_id}" value="${task.due_date || ""}" />
                 <span class="dash-task-project" data-jump-project-id="${row.project.id}">${esc(row.project.name)}</span>
                 ${task.url ? `<a class="dash-task-link" href="${esc(task.url)}" target="_blank" rel="noreferrer">🔗</a>` : ""}
               </div>
