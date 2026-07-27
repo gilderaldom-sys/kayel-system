@@ -348,6 +348,12 @@
   .dash-task-list { display: flex; flex-direction: column; }
   .dash-task-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--paper-line); font-size: 12.5px; }
   .dash-task-title { flex: 1; color: var(--ink); overflow-wrap: break-word; word-break: break-word; }
+  .dash-task-project {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--slate-soft); background: var(--paper);
+    border-radius: 999px; padding: 2px 9px; flex-shrink: 0; white-space: nowrap; max-width: 140px;
+    overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  }
+  .dash-task-project:hover { background: rgba(109,94,245,0.14); color: var(--brass); }
   .dash-task-link { color: var(--slate-soft); text-decoration: none; }
   .dash-task-link:hover { color: var(--brass); }
   .archive-list { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
@@ -2026,7 +2032,10 @@ async function openDashboard() {
   }
 }
 
+let dashboardTasksCache = [];
+
 function renderDashboard(allTasks) {
+  dashboardTasksCache = allTasks;
   const todo = allTasks.filter((t) => t.status === "todo").length;
   const inProgress = allTasks.filter((t) => t.status === "in_progress").length;
   const done = allTasks.filter((t) => t.status === "done").length;
@@ -2065,8 +2074,13 @@ function renderDashboard(allTasks) {
           <div class="dash-task-list">
             ${row.openTasksList.map((task) => `
               <div class="dash-task-row">
-                <span class="task-status task-status-${task.status}">${TASK_STATUS_LABEL_HTML[task.status]}</span>
+                <select class="task-status task-status-${task.status}" data-task-id="${task.id}" data-project-id="${task.project_id}">
+                  <option value="todo" ${task.status === "todo" ? "selected" : ""}>To do</option>
+                  <option value="in_progress" ${task.status === "in_progress" ? "selected" : ""}>In progress</option>
+                  <option value="done" ${task.status === "done" ? "selected" : ""}>Done</option>
+                </select>
                 <span class="dash-task-title">${esc(task.title)}</span>
+                <span class="dash-task-project" data-jump-project-id="${row.project.id}">${esc(row.project.name)}</span>
                 ${task.url ? `<a class="dash-task-link" href="${esc(task.url)}" target="_blank" rel="noreferrer">🔗</a>` : ""}
               </div>
             `).join("")}
@@ -2096,6 +2110,50 @@ function renderDashboard(allTasks) {
       closeMobileSidebar();
     };
   });
+
+  body.querySelectorAll(".dash-task-row .task-status").forEach((sel) => {
+    sel.onclick = (e) => e.stopPropagation();
+    sel.onchange = () => handleDashboardTaskStatusChange(sel.dataset.taskId, sel.dataset.projectId, sel.value);
+  });
+
+  body.querySelectorAll(".dash-task-project").forEach((tag) => {
+    tag.onclick = (e) => {
+      e.stopPropagation();
+      const pid = tag.dataset.jumpProjectId;
+      activeId = pid;
+      currentFolderId = null;
+      folderPath = [];
+      expandedTaskId = null;
+      addingTask = false;
+      renderProjectList();
+      loadFiles();
+      document.getElementById("dashboardModal").classList.remove("open");
+      closeMobileSidebar();
+    };
+  });
+}
+
+async function handleDashboardTaskStatusChange(taskId, projectId, status) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/project_tasks?id=eq.${taskId}`, {
+      method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "return=representation" }, H),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error("Could not update task");
+    const [updated] = await res.json();
+    dashboardTasksCache = dashboardTasksCache.map((t) => (t.id === updated.id ? updated : t));
+    if (projectId === activeId) {
+      const task = tasks.find((t) => t.id === updated.id);
+      if (task) {
+        task.status = updated.status;
+        renderTaskPanel();
+      }
+    }
+    renderDashboard(dashboardTasksCache);
+  } catch (e) {
+    showError("Could not update task");
+  }
 }
 
 let archivedTasksCache = [];
