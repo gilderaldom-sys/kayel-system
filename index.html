@@ -773,7 +773,7 @@
   </div>
 </div>
 
-<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
 
 <script>
 const SUPABASE_URL = "https://zpnouscvyiwbhrdjbvia.supabase.co";
@@ -2390,6 +2390,16 @@ async function loadAppSettings() {
 }
 
 async function initMsal() {
+  const statusEl = document.getElementById("msStatus");
+  if (typeof msal === "undefined") {
+    setMsStatus(
+      statusEl,
+      "Microsoft's sign-in library didn't load — this is usually an ad-blocker, browser extension, or network filter blocking cdn.jsdelivr.net. Try disabling ad-blockers for this page, or a different network, then reload.",
+      "err"
+    );
+    msalInstance = null;
+    return;
+  }
   try {
     msalInstance = new msal.PublicClientApplication({
       auth: {
@@ -2401,14 +2411,13 @@ async function initMsal() {
     });
     await msalInstance.initialize();
     const accounts = msalInstance.getAllAccounts();
-    const statusEl = document.getElementById("msStatus");
     if (accounts.length > 0) {
       setMsStatus(statusEl, `Ready — signed in as ${accounts[0].username}. "Email via Outlook" will now offer to attach the real file.`, "ok");
     } else {
       setMsStatus(statusEl, "Client ID saved. You'll be asked to sign in the first time you send a file.", "ok");
     }
   } catch (e) {
-    setMsStatus(document.getElementById("msStatus"), "Could not set up Microsoft sign-in: " + e.message, "err");
+    setMsStatus(statusEl, "Could not set up Microsoft sign-in: " + e.message, "err");
     msalInstance = null;
   }
 }
