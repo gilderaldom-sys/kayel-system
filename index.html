@@ -405,6 +405,35 @@
   #sendSubmitBtn { border: none; cursor: pointer; }
   #sendSubmitBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+  .send-mode-toggle { display: flex; gap: 6px; margin-top: 14px; margin-bottom: 4px; }
+  .send-mode-btn {
+    flex: 1; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--paper-line);
+    background: #fff; color: var(--slate-soft); font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .send-mode-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .reply-search-row { display: flex; gap: 6px; }
+  .reply-search-row .contact-input { flex: 1; }
+
+  .reply-results { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
+  .reply-result-item {
+    text-align: left; border: 1px solid var(--paper-line); border-radius: 10px; padding: 8px 10px;
+    background: #fff; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .reply-result-item:hover { border-color: var(--brass); background: rgba(109,94,245,0.04); }
+  .reply-result-subject { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .reply-result-meta { font-size: 11px; color: var(--slate-soft); margin-top: 2px; }
+
+  .reply-selected-box {
+    border: 1px solid var(--paper-line); border-radius: 10px; padding: 10px 12px;
+    margin-bottom: 10px; position: relative; background: rgba(109,94,245,0.04);
+  }
+  .reply-selected-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; color: var(--slate-soft); }
+  .reply-selected-subject { font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 3px; }
+  .reply-selected-from { font-size: 11.5px; color: var(--slate-soft); margin-top: 2px; }
+  .reply-selected-box .archive-restore { position: absolute; top: 10px; right: 12px; }
+
   .mobile-close { display: none; }
   .sidebar-handle { display: none; }
   .task-handle { display: none; }
@@ -734,7 +763,7 @@
       <li>Go to <code>portal.azure.com</code> → Microsoft Entra ID → App registrations → New registration.</li>
       <li>Name it anything. Under "Redirect URI" choose platform <b>Single-page application (SPA)</b> and enter this page's exact URL: <code id="redirectUriHint"></code></li>
       <li>After creation, copy the <b>Application (client) ID</b> and <b>Directory (tenant) ID</b> into the boxes below.</li>
-      <li>In the app's "API permissions" tab, add Microsoft Graph → Delegated → <code>Mail.Send</code>, then grant/accept consent.</li>
+      <li>In the app's "API permissions" tab, add Microsoft Graph → Delegated → <code>Mail.Send</code> and <code>Mail.ReadWrite</code> (the second one is needed to search your inbox and reply to threads), then grant/accept consent.</li>
     </ol>
     <div class="ms-setup-row">
       <input class="contact-input" id="msClientIdInput" placeholder="Application (client) ID" />
@@ -750,11 +779,35 @@
     <button class="modal-close" id="closeSendBtn">✕</button>
     <div class="modal-title">✉ Send via Outlook</div>
     <div class="modal-sub" id="sendModalFileLabel"></div>
-    <div class="send-form">
+
+    <div class="send-mode-toggle">
+      <button class="send-mode-btn active" id="sendModeNewBtn" type="button">New email</button>
+      <button class="send-mode-btn" id="sendModeReplyBtn" type="button">Reply to a thread</button>
+    </div>
+
+    <div class="send-form" id="sendNewForm">
       <input class="contact-input" id="sendToInput" placeholder="To (email address)" />
       <input class="contact-input" id="sendSubjectInput" placeholder="Subject" />
       <textarea class="contact-input send-body" id="sendBodyInput" rows="4" placeholder="Message"></textarea>
     </div>
+
+    <div class="send-form" id="sendReplyForm" style="display:none;">
+      <div class="reply-search-row">
+        <input class="contact-input" id="replySearchInput" placeholder="Search your inbox (subject or sender)" />
+        <button class="icon-btn" id="replySearchBtn" type="button">🔍</button>
+      </div>
+      <div id="replySearchResults"></div>
+      <div id="replySelectedThread" style="display:none;">
+        <div class="reply-selected-box">
+          <div class="reply-selected-label">Replying to:</div>
+          <div class="reply-selected-subject" id="replySelectedSubject"></div>
+          <div class="reply-selected-from" id="replySelectedFrom"></div>
+          <button class="archive-restore" id="replyChangeThreadBtn" type="button">Change</button>
+        </div>
+        <textarea class="contact-input send-body" id="replyBodyInput" rows="4" placeholder="Your reply"></textarea>
+      </div>
+    </div>
+
     <div id="sendStatus" class="ms-status"></div>
     <div class="preview-actions">
       <button class="preview-btn" id="sendSubmitBtn">Send with attachment</button>
@@ -2447,16 +2500,17 @@ document.getElementById("msSaveBtn").onclick = async () => {
 
 async function ensureSignedIn() {
   if (!msalInstance) throw new Error("Set up your Azure Client ID first (Connect Outlook panel).");
+  const scopes = ["Mail.Send", "Mail.ReadWrite"];
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     try {
-      const result = await msalInstance.acquireTokenSilent({ scopes: ["Mail.Send"], account: accounts[0] });
+      const result = await msalInstance.acquireTokenSilent({ scopes, account: accounts[0] });
       return result.accessToken;
     } catch (e) {
       // fall through to interactive login
     }
   }
-  const result = await msalInstance.loginPopup({ scopes: ["Mail.Send"] });
+  const result = await msalInstance.loginPopup({ scopes });
   return result.accessToken;
 }
 
@@ -2469,6 +2523,9 @@ function blobToBase64(blob) {
   });
 }
 
+let sendMode = "new";
+let selectedReplyMessage = null;
+
 function openSendModal(f) {
   currentSendFile = f;
   const project = projects.find((p) => p.id === activeId);
@@ -2477,8 +2534,98 @@ function openSendModal(f) {
   document.getElementById("sendSubjectInput").value = `${f.file_name} — ${project ? project.name : ""}`;
   document.getElementById("sendBodyInput").value = `Sharing this file from the ${project ? project.name : ""} project.`;
   setMsStatus(document.getElementById("sendStatus"), "", "");
+
+  sendMode = "new";
+  selectedReplyMessage = null;
+  document.getElementById("sendModeNewBtn").classList.add("active");
+  document.getElementById("sendModeReplyBtn").classList.remove("active");
+  document.getElementById("sendNewForm").style.display = "flex";
+  document.getElementById("sendReplyForm").style.display = "none";
+  document.getElementById("replySearchInput").value = "";
+  document.getElementById("replySearchResults").innerHTML = "";
+  document.getElementById("replySelectedThread").style.display = "none";
+  document.getElementById("sendSubmitBtn").textContent = "Send with attachment";
+
   document.getElementById("sendModal").classList.add("open");
 }
+
+document.getElementById("sendModeNewBtn").onclick = () => {
+  sendMode = "new";
+  document.getElementById("sendModeNewBtn").classList.add("active");
+  document.getElementById("sendModeReplyBtn").classList.remove("active");
+  document.getElementById("sendNewForm").style.display = "flex";
+  document.getElementById("sendReplyForm").style.display = "none";
+  document.getElementById("sendSubmitBtn").textContent = "Send with attachment";
+};
+
+document.getElementById("sendModeReplyBtn").onclick = () => {
+  sendMode = "reply";
+  document.getElementById("sendModeReplyBtn").classList.add("active");
+  document.getElementById("sendModeNewBtn").classList.remove("active");
+  document.getElementById("sendNewForm").style.display = "none";
+  document.getElementById("sendReplyForm").style.display = "flex";
+  document.getElementById("sendSubmitBtn").textContent = selectedReplyMessage ? "Send reply with attachment" : "Send with attachment";
+};
+
+async function searchMailThreads() {
+  const query = document.getElementById("replySearchInput").value.trim();
+  const resultsEl = document.getElementById("replySearchResults");
+  const statusEl = document.getElementById("sendStatus");
+  if (!query) return;
+  resultsEl.innerHTML = `<div class="loading-center"><span class="spin">↻</span> Searching…</div>`;
+  try {
+    const token = await ensureSignedIn();
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/me/messages?$search="${encodeURIComponent(query)}"&$top=10&$select=id,subject,from,receivedDateTime`,
+      { headers: { Authorization: `Bearer ${token}`, ConsistencyLevel: "eventual" } }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Could not search your inbox.");
+    }
+    const data = await res.json();
+    const messages = data.value || [];
+    if (messages.length === 0) {
+      resultsEl.innerHTML = `<div class="empty compact">No emails matched "${esc(query)}".</div>`;
+      return;
+    }
+    resultsEl.className = "reply-results";
+    resultsEl.innerHTML = messages.map((m, i) => `
+      <button class="reply-result-item" data-idx="${i}">
+        <div class="reply-result-subject">${esc(m.subject || "(no subject)")}</div>
+        <div class="reply-result-meta">${esc(m.from?.emailAddress?.name || m.from?.emailAddress?.address || "Unknown sender")} · ${fmtDate(m.receivedDateTime)}</div>
+      </button>
+    `).join("");
+    resultsEl.querySelectorAll(".reply-result-item").forEach((btn, i) => {
+      btn.onclick = () => selectReplyThread(messages[i]);
+    });
+  } catch (e) {
+    setMsStatus(statusEl, e.message, "err");
+    resultsEl.innerHTML = "";
+  }
+}
+
+function selectReplyThread(message) {
+  selectedReplyMessage = message;
+  document.getElementById("replySearchResults").innerHTML = "";
+  document.getElementById("replySelectedSubject").textContent = message.subject || "(no subject)";
+  document.getElementById("replySelectedFrom").textContent =
+    "From: " + (message.from?.emailAddress?.name || message.from?.emailAddress?.address || "Unknown sender");
+  document.getElementById("replyBodyInput").value = `Sharing this file: ${currentSendFile ? currentSendFile.file_name : ""}`;
+  document.getElementById("replySelectedThread").style.display = "block";
+  document.getElementById("sendSubmitBtn").textContent = "Send reply with attachment";
+}
+
+document.getElementById("replyChangeThreadBtn").onclick = () => {
+  selectedReplyMessage = null;
+  document.getElementById("replySelectedThread").style.display = "none";
+  document.getElementById("sendSubmitBtn").textContent = "Send with attachment";
+};
+
+document.getElementById("replySearchBtn").onclick = searchMailThreads;
+document.getElementById("replySearchInput").onkeydown = (e) => {
+  if (e.key === "Enter") { e.preventDefault(); searchMailThreads(); }
+};
 
 document.getElementById("closeSendBtn").onclick = () => {
   document.getElementById("sendModal").classList.remove("open");
@@ -2488,14 +2635,14 @@ document.getElementById("sendModal").onclick = (e) => {
 };
 
 document.getElementById("sendSubmitBtn").onclick = async () => {
-  const to = document.getElementById("sendToInput").value.trim();
-  const subject = document.getElementById("sendSubjectInput").value.trim();
-  const bodyText = document.getElementById("sendBodyInput").value;
   const statusEl = document.getElementById("sendStatus");
   const btn = document.getElementById("sendSubmitBtn");
 
-  if (!to) { setMsStatus(statusEl, "Enter a recipient email address.", "err"); return; }
   if (!currentSendFile) return;
+  if (sendMode === "reply" && !selectedReplyMessage) {
+    setMsStatus(statusEl, "Search for and select an email thread first.", "err");
+    return;
+  }
 
   btn.disabled = true;
   try {
@@ -2515,34 +2662,84 @@ document.getElementById("sendSubmitBtn").onclick = async () => {
     setMsStatus(statusEl, "Encoding attachment…");
     const base64 = await blobToBase64(blob);
 
-    setMsStatus(statusEl, "Sending…");
-    const graphRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          subject,
-          body: { contentType: "Text", content: bodyText },
-          toRecipients: [{ emailAddress: { address: to } }],
-          attachments: [
-            {
-              "@odata.type": "#microsoft.graph.fileAttachment",
-              name: currentSendFile.file_name,
-              contentType: currentSendFile.content_type || "application/octet-stream",
-              contentBytes: base64,
-            },
-          ],
-        },
-        saveToSentItems: true,
-      }),
-    });
+    if (sendMode === "reply") {
+      const replyBody = document.getElementById("replyBodyInput").value;
 
-    if (!graphRes.ok) {
-      const errBody = await graphRes.json().catch(() => ({}));
-      throw new Error(errBody?.error?.message || "Microsoft Graph declined to send this message.");
+      setMsStatus(statusEl, "Creating reply draft…");
+      const draftRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${selectedReplyMessage.id}/createReply`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: replyBody }),
+      });
+      if (!draftRes.ok) {
+        const err = await draftRes.json().catch(() => ({}));
+        throw new Error(err?.error?.message || "Could not create the reply draft.");
+      }
+      const draft = await draftRes.json();
+
+      setMsStatus(statusEl, "Attaching the file…");
+      const attachRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${draft.id}/attachments`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: currentSendFile.file_name,
+          contentType: currentSendFile.content_type || "application/octet-stream",
+          contentBytes: base64,
+        }),
+      });
+      if (!attachRes.ok) {
+        const err = await attachRes.json().catch(() => ({}));
+        throw new Error(err?.error?.message || "Could not attach the file to the reply.");
+      }
+
+      setMsStatus(statusEl, "Sending reply…");
+      const sendRes = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${draft.id}/send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!sendRes.ok) {
+        const err = await sendRes.json().catch(() => ({}));
+        throw new Error(err?.error?.message || "Microsoft Graph declined to send this reply.");
+      }
+
+      setMsStatus(statusEl, "Reply sent, with the file attached ✓", "ok");
+    } else {
+      const to = document.getElementById("sendToInput").value.trim();
+      const subject = document.getElementById("sendSubjectInput").value.trim();
+      const bodyText = document.getElementById("sendBodyInput").value;
+      if (!to) { setMsStatus(statusEl, "Enter a recipient email address.", "err"); btn.disabled = false; return; }
+
+      setMsStatus(statusEl, "Sending…");
+      const graphRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject,
+            body: { contentType: "Text", content: bodyText },
+            toRecipients: [{ emailAddress: { address: to } }],
+            attachments: [
+              {
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                name: currentSendFile.file_name,
+                contentType: currentSendFile.content_type || "application/octet-stream",
+                contentBytes: base64,
+              },
+            ],
+          },
+          saveToSentItems: true,
+        }),
+      });
+
+      if (!graphRes.ok) {
+        const errBody = await graphRes.json().catch(() => ({}));
+        throw new Error(errBody?.error?.message || "Microsoft Graph declined to send this message.");
+      }
+
+      setMsStatus(statusEl, "Sent, with the file attached ✓", "ok");
     }
 
-    setMsStatus(statusEl, "Sent, with the file attached ✓", "ok");
     setTimeout(() => { document.getElementById("sendModal").classList.remove("open"); }, 1200);
   } catch (e) {
     setMsStatus(statusEl, e.message || "Could not send the email.", "err");
