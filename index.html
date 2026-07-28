@@ -583,6 +583,27 @@
       z-index: 55;
       font-size: 15px;
     }
+
+    .dash-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .dash-stat { padding: 10px 6px; }
+    .dash-stat-num { font-size: 20px; }
+    .dash-stat-label { font-size: 9px; }
+
+    .dash-task-row, .archive-task-row {
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+
+    .dash-task-title, .archive-task-title {
+      flex: 1 1 100%;
+      order: -1;
+      width: 100%;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .dash-priority-date-stack { flex-direction: row; align-items: center; }
+    .dash-date-input { width: auto; flex: 1; min-width: 0; }
   }
 
   @media (max-width: 420px) {
